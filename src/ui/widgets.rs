@@ -63,6 +63,10 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
             format!(" (v{} available)", info.latest_version),
             Style::default().fg(Color::Yellow),
         ));
+        right_spans.push(Span::styled(
+            " [U]pdate",
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ));
     }
 
     let left_width: usize = spans.iter().map(|s| s.width()).sum();
@@ -259,6 +263,24 @@ pub fn render_tab_bar(f: &mut Frame, area: Rect, active: Screen) {
 
     let bar = Paragraph::new(Line::from(spans));
     f.render_widget(bar, area);
+}
+
+pub fn render_update_complete_popup(f: &mut Frame, message: &str) {
+    let area = centered_rect(60, 20, f.area());
+    f.render_widget(Clear, area);
+
+    let text = format!("{}\n\nPress any key to exit.", message);
+    let popup = Paragraph::new(text)
+        .block(
+            Block::default()
+                .title(" Update Complete ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green)),
+        )
+        .wrap(Wrap { trim: true })
+        .style(Style::default().fg(Color::Green));
+
+    f.render_widget(popup, area);
 }
 
 pub fn render_error_popup(f: &mut Frame, message: &str) {

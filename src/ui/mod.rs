@@ -75,6 +75,9 @@ pub fn render(f: &mut Frame, app: &App) {
             Popup::Working(msg) => {
                 widgets::render_working_popup(f, msg, app.spinner_char());
             }
+            Popup::UpdateComplete(msg) => {
+                widgets::render_update_complete_popup(f, msg);
+            }
         }
     }
 }

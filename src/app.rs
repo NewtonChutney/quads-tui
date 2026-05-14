@@ -358,6 +358,7 @@ pub struct ActionResult {
     pub success: bool,
     pub message: String,
     pub clear_detail: bool,
+    pub exit_after: bool,
 }
 
 #[derive(Debug)]
@@ -374,6 +375,7 @@ pub enum Popup {
     Scheduling(SchedulingProgress),
     ConfirmUnschedule { schedule_id: i64, host_name: String },
     Working(String),
+    UpdateComplete(String),
     Error(String),
 }
 

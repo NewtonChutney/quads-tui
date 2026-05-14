@@ -277,6 +277,10 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
                 app.popup = None;
                 return;
             }
+            Popup::UpdateComplete(_) => {
+                app.running = false;
+                return;
+            }
             Popup::ServerForm(_) => {
                 handle_server_form_key(app, code);
                 return;
@@ -312,6 +316,15 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
             }
         }
     }
+
+    if code == KeyCode::Char('U')
+        && let Some(ref info) = app.update_available {
+            let url = info.download_url.clone();
+            let ver = info.latest_version.clone();
+            app.popup = Some(Popup::Working(format!("Updating to v{}...", ver)));
+            app.pending_action = Some(update::spawn_self_update(url, ver));
+            return;
+        }
 
     match app.screen {
         Screen::Dashboard => handle_dashboard_key(app, code),
@@ -1739,6 +1752,7 @@ fn spawn_terminate(app: &mut App, assignment_id: i64) {
                     success: true,
                     message: msg,
                     clear_detail: false,
+                    exit_after: false,
                 });
             }
             Err(e) => {
@@ -1746,6 +1760,7 @@ fn spawn_terminate(app: &mut App, assignment_id: i64) {
                     success: false,
                     message: format!("Termination failed: {}", e),
                     clear_detail: false,
+                    exit_after: false,
                 });
             }
         }
@@ -1768,6 +1783,7 @@ fn spawn_unschedule(app: &mut App, schedule_id: i64) {
                     success: true,
                     message: msg,
                     clear_detail: true,
+                    exit_after: false,
                 });
             }
             Err(e) => {
@@ -1775,6 +1791,7 @@ fn spawn_unschedule(app: &mut App, schedule_id: i64) {
                     success: false,
                     message: format!("Unschedule failed: {}", e),
                     clear_detail: false,
+                    exit_after: false,
                 });
             }
         }
@@ -1783,12 +1800,16 @@ fn spawn_unschedule(app: &mut App, schedule_id: i64) {
 
 fn handle_action_result(app: &mut App, result: ActionResult) {
     if result.success {
-        app.status_message = Some(result.message);
-        app.popup = None;
-        if result.clear_detail {
-            app.assignment_detail_selected = None;
+        if result.exit_after {
+            app.popup = Some(Popup::UpdateComplete(result.message));
+        } else {
+            app.status_message = Some(result.message);
+            app.popup = None;
+            if result.clear_detail {
+                app.assignment_detail_selected = None;
+            }
+            spawn_refresh(app);
         }
-        spawn_refresh(app);
     } else {
         app.popup = Some(Popup::Error(result.message));
     }
