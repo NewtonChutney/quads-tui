@@ -78,13 +78,13 @@ jobs:
               "template": "#{{CHANGELOG}}",
               "commit_template": "- #{{TITLE}}",
               "categories": [
-                {"title": "## Features", "labels": ["feat"]},
-                {"title": "## Fixes", "labels": ["fix"]},
-                {"title": "## Other", "labels": []}
+                {"title": "## 🚀 Features", "labels": ["feat"]},
+                {"title": "## 🔧 Fixes", "labels": ["fix"]},
+                {"title": "## 📦 Other", "labels": []}
               ],
               "label_extractor": [
                 {
-                  "pattern": "^(feat|fix|docs|chore|ci|refactor|perf|test)(\\(.*\\))?!?:",
+                  "pattern": "^(feat|fix|docs|chore|ci|refactor|perf|test)",
                   "on_property": "title",
                   "target": "$1",
                   "method": "match"
