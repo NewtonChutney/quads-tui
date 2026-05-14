@@ -48,8 +48,10 @@ async fn main() -> Result<()> {
         println!("    quads-tui [OPTIONS]");
         println!();
         println!("OPTIONS:");
-        println!("    -h, --help       Print this help message");
-        println!("    -V, --version    Print version");
+        println!("    -h, --help                  Print this help message");
+        println!("    -V, --version               Print version");
+        println!("    --update-check=FREQUENCY    Set update check frequency");
+        println!("                                (on_launch, daily, weekly, monthly, never)");
         println!();
         println!("ENVIRONMENT:");
         println!("    RUST_LOG         Set log level (default: info, e.g. RUST_LOG=debug)");
@@ -81,9 +83,34 @@ async fn main() -> Result<()> {
     WriteLogger::init(log_level, simplelog::Config::default(), log_file)?;
     log::info!("quads-tui starting (log level: {})", log_level);
 
-    let config = AppConfig::load().unwrap_or_default();
+    let mut config = AppConfig::load().unwrap_or_default();
+
+    for arg in &args {
+        if let Some(freq) = arg.strip_prefix("--update-check=") {
+            config.update_check = match freq {
+                "on_launch" => config::UpdateFrequency::OnLaunch,
+                "daily" => config::UpdateFrequency::Daily,
+                "weekly" => config::UpdateFrequency::Weekly,
+                "monthly" => config::UpdateFrequency::Monthly,
+                "never" => config::UpdateFrequency::Never,
+                _ => {
+                    eprintln!("Invalid --update-check value: {}", freq);
+                    eprintln!("Valid options: on_launch, daily, weekly, monthly, never");
+                    std::process::exit(1);
+                }
+            };
+            let _ = config.save();
+            println!("Update check set to: {}", freq);
+            return Ok(());
+        }
+    }
+
     let mut app = App::new(config);
-    app.update_rx = Some(update::spawn_update_check());
+    if app.config.should_check_update() {
+        app.update_rx = Some(update::spawn_update_check());
+        app.config.mark_update_checked();
+        let _ = app.config.save();
+    }
 
     if let Some(ref default_name) = app.config.default_server.clone()
         && let Some(entry) = app.config.servers.get(default_name).cloned() {

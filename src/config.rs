@@ -3,6 +3,29 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateFrequency {
+    OnLaunch,
+    Daily,
+    #[default]
+    Weekly,
+    Monthly,
+    Never,
+}
+
+impl UpdateFrequency {
+    pub fn interval_secs(&self) -> Option<u64> {
+        match self {
+            Self::OnLaunch => Some(0),
+            Self::Daily => Some(86400),
+            Self::Weekly => Some(604800),
+            Self::Monthly => Some(2592000),
+            Self::Never => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerEntry {
     pub url: String,
@@ -22,6 +45,10 @@ fn default_true() -> bool {
 pub struct AppConfig {
     #[serde(default)]
     pub default_server: Option<String>,
+    #[serde(default)]
+    pub update_check: UpdateFrequency,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_update_check: Option<u64>,
     #[serde(default)]
     pub servers: BTreeMap<String, ServerEntry>,
 }
@@ -58,6 +85,22 @@ impl AppConfig {
         match &self.default_server {
             Some(s) => { doc["default_server"] = toml_edit::value(s.as_str()); }
             None => { doc.remove("default_server"); }
+        }
+
+        if self.update_check != UpdateFrequency::default() {
+            let freq_str = match self.update_check {
+                UpdateFrequency::OnLaunch => "on_launch",
+                UpdateFrequency::Daily => "daily",
+                UpdateFrequency::Weekly => "weekly",
+                UpdateFrequency::Monthly => "monthly",
+                UpdateFrequency::Never => "never",
+            };
+            doc["update_check"] = toml_edit::value(freq_str);
+        }
+
+        match self.last_update_check {
+            Some(ts) => { doc["last_update_check"] = toml_edit::value(ts as i64); }
+            None => { doc.remove("last_update_check"); }
         }
 
         if self.servers.is_empty() {
@@ -100,6 +143,32 @@ impl AppConfig {
 
         std::fs::write(&path, doc.to_string())?;
         Ok(())
+    }
+
+    pub fn should_check_update(&self) -> bool {
+        let Some(interval) = self.update_check.interval_secs() else {
+            return false;
+        };
+        if interval == 0 {
+            return true;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        match self.last_update_check {
+            Some(last) => now.saturating_sub(last) >= interval,
+            None => true,
+        }
+    }
+
+    pub fn mark_update_checked(&mut self) {
+        self.last_update_check = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+        );
     }
 
     pub fn add_server(&mut self, name: String, entry: ServerEntry) {
