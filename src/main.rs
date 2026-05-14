@@ -333,16 +333,14 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('x') => {
             app.auto_refresh = !app.auto_refresh;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.server_selected > 0 {
+        KeyCode::Up | KeyCode::Char('k')
+            if app.server_selected > 0 => {
                 app.server_selected -= 1;
             }
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if server_count > 0 && app.server_selected < server_count - 1 {
+        KeyCode::Down | KeyCode::Char('j')
+            if server_count > 0 && app.server_selected < server_count - 1 => {
                 app.server_selected += 1;
             }
-        }
         KeyCode::Enter => {
             let server_names: Vec<String> = app.config.servers.keys().cloned().collect();
             if let Some(name) = server_names.get(app.server_selected) {
@@ -436,16 +434,14 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
             KeyCode::Up | KeyCode::Down => {
                 let host_count = app.filtered_hosts().len();
                 match code {
-                    KeyCode::Up => {
-                        if app.host_selected > 0 {
+                    KeyCode::Up
+                        if app.host_selected > 0 => {
                             app.host_selected -= 1;
                         }
-                    }
-                    KeyCode::Down => {
-                        if host_count > 0 && app.host_selected < host_count - 1 {
+                    KeyCode::Down
+                        if host_count > 0 && app.host_selected < host_count - 1 => {
                             app.host_selected += 1;
                         }
-                    }
                     _ => {}
                 }
             }
@@ -468,32 +464,28 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.host_selected > 0 {
+        KeyCode::Up | KeyCode::Char('k')
+            if app.host_selected > 0 => {
                 app.host_selected -= 1;
             }
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if host_count > 0 && app.host_selected < host_count - 1 {
+        KeyCode::Down | KeyCode::Char('j')
+            if host_count > 0 && app.host_selected < host_count - 1 => {
                 app.host_selected += 1;
             }
-        }
         KeyCode::PageUp => {
             app.host_selected = app.host_selected.saturating_sub(20);
         }
-        KeyCode::PageDown => {
-            if host_count > 0 {
+        KeyCode::PageDown
+            if host_count > 0 => {
                 app.host_selected = (app.host_selected + 20).min(host_count - 1);
             }
-        }
         KeyCode::Home => {
             app.host_selected = 0;
         }
-        KeyCode::End => {
-            if host_count > 0 {
+        KeyCode::End
+            if host_count > 0 => {
                 app.host_selected = host_count - 1;
             }
-        }
         KeyCode::Char('/') => {
             app.host_searching = true;
             app.host_search = None;
@@ -632,16 +624,14 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             KeyCode::Up | KeyCode::Down => {
                 let count = filtered_assignment_count(app);
                 match code {
-                    KeyCode::Up => {
-                        if app.assignment_selected > 0 {
+                    KeyCode::Up
+                        if app.assignment_selected > 0 => {
                             app.assignment_selected -= 1;
                         }
-                    }
-                    KeyCode::Down => {
-                        if count > 0 && app.assignment_selected < count - 1 {
+                    KeyCode::Down
+                        if count > 0 && app.assignment_selected < count - 1 => {
                             app.assignment_selected += 1;
                         }
-                    }
                     _ => {}
                 }
             }
@@ -658,16 +648,14 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             KeyCode::Esc => {
                 app.assignment_detail_selected = None;
             }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if detail_idx > 0 {
+            KeyCode::Up | KeyCode::Char('k')
+                if detail_idx > 0 => {
                     app.assignment_detail_selected = Some(detail_idx - 1);
                 }
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if schedule_count > 0 && detail_idx < schedule_count - 1 {
+            KeyCode::Down | KeyCode::Char('j')
+                if schedule_count > 0 && detail_idx < schedule_count - 1 => {
                     app.assignment_detail_selected = Some(detail_idx + 1);
                 }
-            }
             KeyCode::Enter => {
                 if let Some(session) = app.sessions.active_session() {
                     let assignment = get_selected_assignment(app, session);
@@ -725,18 +713,16 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.assignment_selected > 0 {
+        KeyCode::Up | KeyCode::Char('k')
+            if app.assignment_selected > 0 => {
                 app.assignment_selected -= 1;
                 app.assignment_detail_selected = None;
             }
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if assignment_count > 0 && app.assignment_selected < assignment_count - 1 {
+        KeyCode::Down | KeyCode::Char('j')
+            if assignment_count > 0 && app.assignment_selected < assignment_count - 1 => {
                 app.assignment_selected += 1;
                 app.assignment_detail_selected = None;
             }
-        }
         KeyCode::Enter => {
             let count = assignment_schedule_count(app);
             if count > 0 {
@@ -746,19 +732,17 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
         KeyCode::PageUp => {
             app.assignment_selected = app.assignment_selected.saturating_sub(20);
         }
-        KeyCode::PageDown => {
-            if assignment_count > 0 {
+        KeyCode::PageDown
+            if assignment_count > 0 => {
                 app.assignment_selected = (app.assignment_selected + 20).min(assignment_count - 1);
             }
-        }
         KeyCode::Home => {
             app.assignment_selected = 0;
         }
-        KeyCode::End => {
-            if assignment_count > 0 {
+        KeyCode::End
+            if assignment_count > 0 => {
                 app.assignment_selected = assignment_count - 1;
             }
-        }
         KeyCode::Tab => {
             app.assignment_show_all = !app.assignment_show_all;
             app.assignment_selected = 0;
@@ -858,16 +842,14 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
             KeyCode::Up | KeyCode::Down => {
                 let cloud_count = filtered_cloud_count(app);
                 match code {
-                    KeyCode::Up => {
-                        if app.cloud_selected > 0 {
+                    KeyCode::Up
+                        if app.cloud_selected > 0 => {
                             app.cloud_selected -= 1;
                         }
-                    }
-                    KeyCode::Down => {
-                        if cloud_count > 0 && app.cloud_selected < cloud_count - 1 {
+                    KeyCode::Down
+                        if cloud_count > 0 && app.cloud_selected < cloud_count - 1 => {
                             app.cloud_selected += 1;
                         }
-                    }
                     _ => {}
                 }
             }
@@ -888,32 +870,28 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') => {
-            if app.cloud_selected > 0 {
+        KeyCode::Up | KeyCode::Char('k')
+            if app.cloud_selected > 0 => {
                 app.cloud_selected -= 1;
             }
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if cloud_count > 0 && app.cloud_selected < cloud_count - 1 {
+        KeyCode::Down | KeyCode::Char('j')
+            if cloud_count > 0 && app.cloud_selected < cloud_count - 1 => {
                 app.cloud_selected += 1;
             }
-        }
         KeyCode::PageUp => {
             app.cloud_selected = app.cloud_selected.saturating_sub(20);
         }
-        KeyCode::PageDown => {
-            if cloud_count > 0 {
+        KeyCode::PageDown
+            if cloud_count > 0 => {
                 app.cloud_selected = (app.cloud_selected + 20).min(cloud_count - 1);
             }
-        }
         KeyCode::Home => {
             app.cloud_selected = 0;
         }
-        KeyCode::End => {
-            if cloud_count > 0 {
+        KeyCode::End
+            if cloud_count > 0 => {
                 app.cloud_selected = cloud_count - 1;
             }
-        }
         KeyCode::Tab => {
             app.cloud_show_all = !app.cloud_show_all;
             app.cloud_selected = 0;

@@ -25,21 +25,18 @@ impl EventHandler {
             loop {
                 if event::poll(tick_rate).unwrap_or(false) {
                     match event::read() {
-                        Ok(CrosstermEvent::Key(key)) => {
-                            if tx.send(Event::Key(key)).is_err() {
+                        Ok(CrosstermEvent::Key(key))
+                            if tx.send(Event::Key(key)).is_err() => {
                                 return;
                             }
-                        }
-                        Ok(CrosstermEvent::FocusGained) => {
-                            if tx.send(Event::FocusGained).is_err() {
+                        Ok(CrosstermEvent::FocusGained)
+                            if tx.send(Event::FocusGained).is_err() => {
                                 return;
                             }
-                        }
-                        Ok(CrosstermEvent::FocusLost) => {
-                            if tx.send(Event::FocusLost).is_err() {
+                        Ok(CrosstermEvent::FocusLost)
+                            if tx.send(Event::FocusLost).is_err() => {
                                 return;
                             }
-                        }
                         _ => {}
                     }
                 } else if tx.send(Event::Tick).is_err() {
