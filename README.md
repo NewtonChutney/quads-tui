@@ -11,22 +11,46 @@ A terminal UI for [QUADS](https://github.com/redhat-performance/quads) bare-meta
 - Auto-refresh and manual refresh
 - Single-instance enforcement (only one copy runs at a time)
 
-## Supported Platforms
+## Installation
 
-- Linux
-- macOS
-- Windows
-
-All dependencies are cross-platform. No platform-specific code is used.
-
-## Requirements
-
-- Rust 1.85+ (edition 2024)
-- Network access to a QUADS v3 API server (VPN may be required)
-
-## Building
+### Quick install (Linux / macOS)
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/NewtonChutney/quads-tui/main/script/install.sh | bash
+```
+
+This downloads the latest release binary to `~/.local/bin/quads-tui`.
+
+To install to a custom location:
+
+```sh
+INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/NewtonChutney/quads-tui/main/script/install.sh | bash
+```
+
+### cargo binstall
+
+If you have [cargo-binstall](https://github.com/cargo-bins/cargo-binstall) installed:
+
+```sh
+cargo binstall --git https://github.com/NewtonChutney/quads-tui quads-tui
+```
+
+### Download from GitHub Releases
+
+Pre-built binaries are available on the [Releases](https://github.com/NewtonChutney/quads-tui/releases) page for:
+
+- Linux x86_64
+- Linux aarch64
+- macOS aarch64 (Apple Silicon)
+- Windows x86_64
+
+### Build from source
+
+Requires Rust 1.85+ (edition 2024).
+
+```sh
+git clone https://github.com/NewtonChutney/quads-tui.git
+cd quads-tui
 cargo build --release
 ```
 
@@ -35,9 +59,15 @@ The binary will be at `target/release/quads-tui`.
 ## Running
 
 ```sh
-cargo run
-# or
+quads-tui
+# or from source
 ./target/release/quads-tui
+```
+
+Check version:
+
+```sh
+quads-tui --version
 ```
 
 On first run, add a server from the Dashboard with `n`, then connect with `Enter`.
@@ -109,6 +139,7 @@ src/
   config.rs         - Config file read/write
   event.rs          - Terminal event polling
   session.rs        - Multi-session manager with cached data
+  update.rs         - Version checking via GitHub releases API
   api/
     endpoints.rs    - HTTP client for QUADS v3 API
     models.rs       - Serde structs for API responses
@@ -123,4 +154,4 @@ src/
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+This project is licensed under the [MIT License](LICENSE).

@@ -53,6 +53,26 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    let mut right_spans = vec![Span::styled(
+        format!("v{}", crate::update::VERSION),
+        Style::default().fg(Color::DarkGray),
+    )];
+
+    if let Some(ref info) = app.update_available {
+        right_spans.push(Span::styled(
+            format!(" (v{} available)", info.latest_version),
+            Style::default().fg(Color::Yellow),
+        ));
+    }
+
+    let left_width: usize = spans.iter().map(|s| s.width()).sum();
+    let right_width: usize = right_spans.iter().map(|s| s.width()).sum();
+    let total = area.width as usize;
+    if total > left_width + right_width {
+        spans.push(Span::raw(" ".repeat(total - left_width - right_width)));
+    }
+    spans.extend(right_spans);
+
     let bar = Paragraph::new(Line::from(spans));
     f.render_widget(bar, area);
 }

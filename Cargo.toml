@@ -1,7 +1,25 @@
 [package]
 name = "quads-tui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
+repository = "https://github.com/NewtonChutney/quads-tui"
+license = "MIT"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-{ target }{ binary-ext }"
+pkg-fmt = "bin"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-linux-x86_64"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-linux-aarch64"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-macos-aarch64"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-windows-x86_64.exe"
 
 [dependencies]
 ratatui = "0.29"
@@ -16,3 +34,4 @@ anyhow = "1"
 log = "0.4"
 simplelog = "0.12"
 fs2 = "0.4"
+semver = "1"

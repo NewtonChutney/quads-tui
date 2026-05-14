@@ -4,6 +4,7 @@ mod config;
 mod event;
 mod session;
 mod ui;
+mod update;
 
 use anyhow::Result;
 use app::{
@@ -34,6 +35,32 @@ const AUTO_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("quads-tui {}", update::VERSION);
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("quads-tui {} — Terminal UI for QUADS bare-metal scheduling", update::VERSION);
+        println!();
+        println!("USAGE:");
+        println!("    quads-tui [OPTIONS]");
+        println!();
+        println!("OPTIONS:");
+        println!("    -h, --help       Print this help message");
+        println!("    -V, --version    Print version");
+        println!();
+        println!("ENVIRONMENT:");
+        println!("    RUST_LOG         Set log level (default: info, e.g. RUST_LOG=debug)");
+        println!();
+        println!("CONFIG:");
+        println!("    ~/.config/quads/quads-tui.toml");
+        println!();
+        println!("LOGS:");
+        println!("    ~/.config/quads/quads-tui.log");
+        return Ok(());
+    }
+
     let config_dir = dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("quads");
@@ -55,6 +82,7 @@ async fn main() -> Result<()> {
 
     let config = AppConfig::load().unwrap_or_default();
     let mut app = App::new(config);
+    app.update_rx = Some(update::spawn_update_check());
 
     if let Some(ref default_name) = app.config.default_server.clone() {
         if let Some(entry) = app.config.servers.get(default_name).cloned() {
@@ -123,6 +151,16 @@ async fn main() -> Result<()> {
                     if let Ok(result) = rx.try_recv() {
                         app.pending_action = None;
                         handle_action_result(&mut app, result);
+                    }
+                }
+
+                if let Some(ref mut rx) = app.update_rx {
+                    if let Ok(result) = rx.try_recv() {
+                        app.update_rx = None;
+                        if let Some(info) = result {
+                            log::info!("update available: v{}", info.latest_version);
+                            app.update_available = Some(info);
+                        }
                     }
                 }
 

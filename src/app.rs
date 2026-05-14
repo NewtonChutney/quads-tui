@@ -416,6 +416,8 @@ pub struct App {
     pub pending_schedule: Option<oneshot::Receiver<ScheduleResult>>,
     pub pending_action: Option<oneshot::Receiver<ActionResult>>,
     pub refresh_rx: Option<tokio::sync::mpsc::Receiver<RefreshUpdate>>,
+    pub update_rx: Option<oneshot::Receiver<Option<crate::update::UpdateInfo>>>,
+    pub update_available: Option<crate::update::UpdateInfo>,
 }
 
 impl App {
@@ -459,6 +461,8 @@ impl App {
             pending_schedule: None,
             pending_action: None,
             refresh_rx: None,
+            update_rx: None,
+            update_available: None,
         }
     }
 
