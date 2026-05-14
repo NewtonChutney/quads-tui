@@ -1,6 +1,6 @@
 [package]
 name = "quads-tui"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 repository = "https://github.com/NewtonChutney/quads-tui"
 license = "MIT"
@@ -25,7 +25,7 @@ pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-windows-x86_64.exe"
 ratatui = "0.29"
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "6"
