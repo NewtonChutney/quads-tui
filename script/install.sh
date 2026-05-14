@@ -3,9 +3,13 @@ set -euo pipefail
 
 REPO="NewtonChutney/quads-tui"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+TMPDIR_CLEANUP=""
+
+cleanup() { [ -n "$TMPDIR_CLEANUP" ] && rm -rf "$TMPDIR_CLEANUP"; }
+trap cleanup EXIT
 
 main() {
-    local platform arch version url tmpdir
+    local platform arch version url
 
     platform="$(detect_platform)"
     arch="$(detect_arch)"
@@ -29,14 +33,13 @@ main() {
     url="https://github.com/${REPO}/releases/download/${version}/${asset_name}"
 
     echo "Downloading quads-tui ${version} for ${platform}-${arch}..."
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+    TMPDIR_CLEANUP="$(mktemp -d)"
 
-    fetch "$url" > "$tmpdir/quads-tui"
-    chmod +x "$tmpdir/quads-tui"
+    fetch "$url" > "$TMPDIR_CLEANUP/quads-tui"
+    chmod +x "$TMPDIR_CLEANUP/quads-tui"
 
     mkdir -p "$INSTALL_DIR"
-    mv "$tmpdir/quads-tui" "$INSTALL_DIR/quads-tui"
+    mv "$TMPDIR_CLEANUP/quads-tui" "$INSTALL_DIR/quads-tui"
 
     echo "Installed quads-tui to ${INSTALL_DIR}/quads-tui"
     check_path
