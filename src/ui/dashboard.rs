@@ -152,7 +152,7 @@ fn render_bar(
         let width = if i == non_zero.len() - 1 {
             bar_width - used
         } else {
-            let w = (seg.count * bar_width + total - 1) / total;
+            let w = (seg.count * bar_width).div_ceil(total);
             w.min(bar_width - used)
         };
         if width > 0 {

@@ -15,7 +15,7 @@ pub fn fuzzy_match(haystack: &str, needle: &str) -> bool {
 }
 
 pub fn assignment_matches_search(a: &crate::api::models::Assignment, search: &str) -> bool {
-    fuzzy_match(&a.cloud_name().unwrap_or(""), search)
+    fuzzy_match(a.cloud_name().unwrap_or(""), search)
         || fuzzy_match(a.owner.as_deref().unwrap_or(""), search)
         || fuzzy_match(a.description.as_deref().unwrap_or(""), search)
         || fuzzy_match(a.ticket.as_deref().unwrap_or(""), search)
@@ -506,11 +506,10 @@ impl App {
             .hosts
             .iter()
             .filter(|h| {
-                if let Some(ref search) = self.host_search {
-                    if !fuzzy_match(&h.name, search) {
+                if let Some(ref search) = self.host_search
+                    && !fuzzy_match(&h.name, search) {
                         return false;
                     }
-                }
 
                 if self.host_self_schedule_only {
                     return h.can_self_schedule == Some(true)

@@ -84,8 +84,8 @@ async fn main() -> Result<()> {
     let mut app = App::new(config);
     app.update_rx = Some(update::spawn_update_check());
 
-    if let Some(ref default_name) = app.config.default_server.clone() {
-        if let Some(entry) = app.config.servers.get(default_name).cloned() {
+    if let Some(ref default_name) = app.config.default_server.clone()
+        && let Some(entry) = app.config.servers.get(default_name).cloned() {
             let server_names: Vec<String> = app.config.servers.keys().cloned().collect();
             if let Some(idx) = server_names.iter().position(|n| n == default_name) {
                 app.server_selected = idx;
@@ -96,7 +96,6 @@ async fn main() -> Result<()> {
                 spawn_refresh(&mut app);
             }
         }
-    }
 
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
@@ -133,42 +132,37 @@ async fn main() -> Result<()> {
             Event::Tick => {
                 app.tick = app.tick.wrapping_add(1);
 
-                if let Some(ref mut rx) = app.pending_connect {
-                    if let Ok(result) = rx.try_recv() {
+                if let Some(ref mut rx) = app.pending_connect
+                    && let Ok(result) = rx.try_recv() {
                         app.pending_connect = None;
                         handle_connect_result(&mut app, result);
                     }
-                }
 
-                if let Some(ref mut rx) = app.pending_schedule {
-                    if let Ok(result) = rx.try_recv() {
+                if let Some(ref mut rx) = app.pending_schedule
+                    && let Ok(result) = rx.try_recv() {
                         app.pending_schedule = None;
                         handle_schedule_result(&mut app, result);
                     }
-                }
 
-                if let Some(ref mut rx) = app.pending_action {
-                    if let Ok(result) = rx.try_recv() {
+                if let Some(ref mut rx) = app.pending_action
+                    && let Ok(result) = rx.try_recv() {
                         app.pending_action = None;
                         handle_action_result(&mut app, result);
                     }
-                }
 
-                if let Some(ref mut rx) = app.update_rx {
-                    if let Ok(result) = rx.try_recv() {
+                if let Some(ref mut rx) = app.update_rx
+                    && let Ok(result) = rx.try_recv() {
                         app.update_rx = None;
                         if let Some(info) = result {
                             log::info!("update available: v{}", info.latest_version);
                             app.update_available = Some(info);
                         }
                     }
-                }
 
-                if let Some(Popup::ConnectSuccess(_, start_tick)) = &app.popup {
-                    if app.tick.wrapping_sub(*start_tick) >= 4 {
+                if let Some(Popup::ConnectSuccess(_, start_tick)) = &app.popup
+                    && app.tick.wrapping_sub(*start_tick) >= 4 {
                         app.popup = None;
                     }
-                }
 
                 {
                     let mut refresh_done = false;
@@ -699,15 +693,14 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                             .iter()
                             .filter(|s| s.assignment_id == assignment.id)
                             .collect();
-                        if let Some(sched) = scheds.get(detail_idx) {
-                            if let Some(sid) = sched.id {
+                        if let Some(sched) = scheds.get(detail_idx)
+                            && let Some(sid) = sched.id {
                                 let host = sched.host_name().to_string();
                                 app.popup = Some(Popup::ConfirmUnschedule {
                                     schedule_id: sid,
                                     host_name: host,
                                 });
                             }
-                        }
                     }
                 }
             }
@@ -784,11 +777,10 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                 } else {
                     &session.my_assignments
                 };
-                if let Some(a) = assignments.get(app.assignment_selected) {
-                    if let Some(id) = a.id {
+                if let Some(a) = assignments.get(app.assignment_selected)
+                    && let Some(id) = a.id {
                         app.popup = Some(Popup::ConfirmTerminate(id));
                     }
-                }
             }
         }
         KeyCode::Char('r') => spawn_refresh(app),
@@ -824,15 +816,14 @@ fn filtered_cloud_count(app: &App) -> usize {
                     _ => return false,
                 }
             }
-            if let Some(ref search) = app.cloud_search {
-                if !app::fuzzy_match(&c.name, search)
+            if let Some(ref search) = app.cloud_search
+                && !app::fuzzy_match(&c.name, search)
                     && !app::fuzzy_match(c.owner.as_deref().unwrap_or(""), search)
                     && !app::fuzzy_match(c.ticket.as_deref().unwrap_or(""), search)
                     && !app::fuzzy_match(c.description.as_deref().unwrap_or(""), search)
                 {
                     return false;
                 }
-            }
             true
         })
         .count()
@@ -959,18 +950,16 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
-                if popup.pane == app::FilterPane::Status && popup.cursor > 0 {
+            if let Some(Popup::HostFilter(ref mut popup)) = app.popup
+                && popup.pane == app::FilterPane::Status && popup.cursor > 0 {
                     popup.cursor -= 1;
                 }
-            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
-                if popup.pane == app::FilterPane::Status && popup.cursor < 3 {
+            if let Some(Popup::HostFilter(ref mut popup)) = app.popup
+                && popup.pane == app::FilterPane::Status && popup.cursor < 3 {
                     popup.cursor += 1;
                 }
-            }
         }
         KeyCode::Char(' ') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
@@ -997,18 +986,16 @@ fn handle_host_info_key(app: &mut App, code: KeyCode) {
             app.popup = None;
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if let Some(Popup::HostInfo(ref mut state)) = app.popup {
-                if state.cursor > 0 {
+            if let Some(Popup::HostInfo(ref mut state)) = app.popup
+                && state.cursor > 0 {
                     state.cursor -= 1;
                 }
-            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if let Some(Popup::HostInfo(ref mut state)) = app.popup {
-                if state.cursor < 3 {
+            if let Some(Popup::HostInfo(ref mut state)) = app.popup
+                && state.cursor < 3 {
                     state.cursor += 1;
                 }
-            }
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup {
@@ -1055,18 +1042,16 @@ fn handle_server_form_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Backspace => {
-            if let Some(Popup::ServerForm(ref mut form)) = app.popup {
-                if let Some(val) = form.active_value_mut() {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(val) = form.active_value_mut() {
                     val.pop();
                 }
-            }
         }
         KeyCode::Char(c) => {
-            if let Some(Popup::ServerForm(ref mut form)) = app.popup {
-                if let Some(val) = form.active_value_mut() {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(val) = form.active_value_mut() {
                     val.push(c);
                 }
-            }
         }
         KeyCode::Enter => {
             if let Some(Popup::ServerForm(form)) = app.popup.take() {
@@ -1075,11 +1060,10 @@ fn handle_server_form_key(app: &mut App, code: KeyCode) {
                     return;
                 }
 
-                if let Some(ref old_name) = form.editing_existing {
-                    if *old_name != form.name {
+                if let Some(ref old_name) = form.editing_existing
+                    && *old_name != form.name {
                         app.config.remove_server(old_name);
                     }
-                }
 
                 let existing = app.config.servers.get(&form.name);
                 app.config.add_server(
@@ -1468,22 +1452,20 @@ fn handle_assignment_picker_key(app: &mut App, code: KeyCode) {
             app.popup = None;
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup {
-                if state.cursor > 0 {
+            if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup
+                && state.cursor > 0 {
                     state.cursor -= 1;
                 }
-            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup {
-                if item_count > 0 && state.cursor < item_count - 1 {
+            if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup
+                && item_count > 0 && state.cursor < item_count - 1 {
                     state.cursor += 1;
                 }
-            }
         }
         KeyCode::Enter => {
-            if let Some(Popup::AssignmentPicker(state)) = app.popup.take() {
-                if let Some(item) = state.items.get(state.cursor) {
+            if let Some(Popup::AssignmentPicker(state)) = app.popup.take()
+                && let Some(item) = state.items.get(state.cursor) {
                     match item {
                         AssignmentPickerItem::Existing { cloud_name, .. } => {
                             spawn_schedule_to_existing(
@@ -1499,7 +1481,6 @@ fn handle_assignment_picker_key(app: &mut App, code: KeyCode) {
                         }
                     }
                 }
-            }
         }
         _ => {}
     }
@@ -1530,18 +1511,16 @@ fn handle_new_assignment_form_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Backspace => {
-            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup {
-                if form.active_field == app::NewAssignmentField::Description {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
                     form.description.pop();
                 }
-            }
         }
         KeyCode::Char(c) => {
-            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup {
-                if form.active_field == app::NewAssignmentField::Description {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
                     form.description.push(c);
                 }
-            }
         }
         KeyCode::Enter => {
             if let Some(Popup::NewAssignmentForm(form)) = app.popup.take() {
