@@ -333,7 +333,7 @@ pub fn render_server_form(f: &mut Frame, form: &ServerForm) {
         (ServerFormField::Url, "URL", &form.url),
     ];
 
-    for (i, (field, label, value)) in fields.iter().enumerate() {
+    for (i, (field, label, input)) in fields.iter().enumerate() {
         let is_active = form.active_field == *field;
         let border_style = if is_active {
             Style::default().fg(Color::Yellow)
@@ -341,16 +341,25 @@ pub fn render_server_form(f: &mut Frame, form: &ServerForm) {
             Style::default().fg(Color::DarkGray)
         };
 
-        let cursor = if is_active { "█" } else { "" };
+        let cursor_style = Style::default().add_modifier(Modifier::REVERSED);
+        let line = if is_active {
+            Line::from(vec![
+                Span::raw(input.before_cursor()),
+                Span::styled(input.char_at_cursor(), cursor_style),
+                Span::raw(input.after_cursor_char()),
+            ])
+        } else {
+            Line::raw(&input.value)
+        };
 
-        let input = Paragraph::new(format!("{}{}", value, cursor)).block(
+        let widget = Paragraph::new(line).block(
             Block::default()
                 .title(format!(" {} ", label))
                 .borders(Borders::ALL)
                 .border_style(border_style),
         );
 
-        f.render_widget(input, field_chunks[i]);
+        f.render_widget(widget, field_chunks[i]);
     }
 
     let ssl_active = form.active_field == ServerFormField::VerifySsl;
@@ -429,12 +438,13 @@ pub fn render_auth_form(f: &mut Frame, form: &AuthForm) {
         f.render_widget(error_msg, field_chunks[0]);
     }
 
-    let fields: [(AuthFormField, &str, &str, bool); 2] = [
+    use crate::app::TextInput;
+    let fields: [(AuthFormField, &str, &TextInput, bool); 2] = [
         (AuthFormField::Username, "Username", &form.username, false),
         (AuthFormField::Password, "Password", &form.password, true),
     ];
 
-    for (i, (field, label, value, is_password)) in fields.iter().enumerate() {
+    for (i, (field, label, input, is_password)) in fields.iter().enumerate() {
         let is_active = form.active_field == *field;
         let border_style = if is_active {
             Style::default().fg(Color::Yellow)
@@ -442,44 +452,60 @@ pub fn render_auth_form(f: &mut Frame, form: &AuthForm) {
             Style::default().fg(Color::DarkGray)
         };
 
-        let display_value = if *is_password && !value.is_empty() {
-            "*".repeat(value.len())
-        } else if value.is_empty() && *field == AuthFormField::Username {
+        let cursor_style = Style::default().add_modifier(Modifier::REVERSED);
+        let line = if input.is_empty() && *field == AuthFormField::Username {
             if is_active {
-                String::new()
+                Line::from(vec![
+                    Span::styled("u", Style::default().fg(Color::DarkGray).add_modifier(Modifier::REVERSED)),
+                    Span::styled("ser@example.com", Style::default().fg(Color::DarkGray)),
+                ])
             } else {
-                "user@example.com".to_string()
+                Line::from(Span::styled("user@example.com", Style::default().fg(Color::DarkGray)))
             }
+        } else if *is_password {
+            let masked_before = "*".repeat(input.before_cursor().chars().count());
+            let cursor_char = if input.cursor < input.value.len() { "*" } else { " " };
+            let masked_after_count = input.after_cursor_char().chars().count();
+            let masked_after = "*".repeat(masked_after_count);
+            if is_active {
+                Line::from(vec![
+                    Span::raw(masked_before),
+                    Span::styled(cursor_char, cursor_style),
+                    Span::raw(masked_after),
+                ])
+            } else {
+                Line::raw("*".repeat(input.value.chars().count()))
+            }
+        } else if is_active {
+            Line::from(vec![
+                Span::raw(input.before_cursor()),
+                Span::styled(input.char_at_cursor(), cursor_style),
+                Span::raw(input.after_cursor_char()),
+            ])
         } else {
-            value.to_string()
+            Line::raw(&input.value)
         };
 
-        let display_style = if value.is_empty() && *field == AuthFormField::Username && !is_active {
-            Style::default().fg(Color::DarkGray)
-        } else {
-            Style::default()
-        };
-
-        let cursor = if is_active { "\u{2588}" } else { "" };
-
-        let input = Paragraph::new(Line::from(vec![
-            Span::styled(display_value, display_style),
-            Span::raw(cursor),
-        ])).block(
+        let widget = Paragraph::new(line).block(
             Block::default()
                 .title(format!(" {} ", label))
                 .borders(Borders::ALL)
                 .border_style(border_style),
         );
 
-        f.render_widget(input, field_chunks[i + 1]);
+        f.render_widget(widget, field_chunks[i + 1]);
     }
 
+    let enter_action = if form.active_field == AuthFormField::Username && form.password.is_empty() {
+        " next  "
+    } else {
+        " connect  "
+    };
     let help = Paragraph::new(Line::from(vec![
         Span::styled(" Tab", Style::default().fg(Color::Yellow)),
         Span::raw(" next  "),
         Span::styled("Enter", Style::default().fg(Color::Yellow)),
-        Span::raw(" connect  "),
+        Span::raw(enter_action),
         Span::styled("Esc", Style::default().fg(Color::Yellow)),
         Span::raw(" cancel"),
     ]))
@@ -541,7 +567,7 @@ fn render_register_prompt(f: &mut Frame, form: &AuthForm) {
 
     let prompt = Paragraph::new(Line::from(vec![
         Span::raw(" Register as "),
-        Span::styled(&form.username, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(&form.username.value, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw("?"),
     ]));
     f.render_widget(prompt, chunks[1]);
@@ -1077,11 +1103,17 @@ pub fn render_new_assignment_form(f: &mut Frame, form: &crate::app::NewAssignmen
     } else {
         Style::default().fg(Color::DarkGray)
     };
-    let cursor = if desc_active { "\u{2588}" } else { "" };
-    let desc_input = Paragraph::new(Line::from(vec![
-        Span::raw(&form.description),
-        Span::raw(cursor),
-    ]))
+    let cursor_style = Style::default().add_modifier(Modifier::REVERSED);
+    let desc_line = if desc_active {
+        Line::from(vec![
+            Span::raw(form.description.before_cursor()),
+            Span::styled(form.description.char_at_cursor(), cursor_style),
+            Span::raw(form.description.after_cursor_char()),
+        ])
+    } else {
+        Line::raw(&form.description.value)
+    };
+    let desc_input = Paragraph::new(desc_line)
     .block(
         Block::default()
             .title(" Description ")

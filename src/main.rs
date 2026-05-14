@@ -8,9 +8,10 @@ mod update;
 
 use anyhow::Result;
 use app::{
-    ActionResult, App, AssignmentPickerItem, AssignmentPickerState, AuthForm, ConnectError,
-    ConnectResult, HostFilterPopup, HostInfoState, NewAssignmentForm, Popup, RefreshUpdate,
-    ScheduleResult, SchedulingProgress, Screen, ServerForm, ServerFormField,
+    ActionResult, App, AssignmentPickerItem, AssignmentPickerState, AuthForm, AuthFormField,
+    ConnectError, ConnectResult, HostFilterPopup, HostInfoState, NewAssignmentForm, Popup,
+    RefreshUpdate, ScheduleResult, SchedulingProgress, Screen, ServerForm, ServerFormField,
+    TextInput,
 };
 use config::{AppConfig, ServerEntry};
 use crossterm::ExecutableCommand;
@@ -282,7 +283,7 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
                 return;
             }
             Popup::ServerForm(_) => {
-                handle_server_form_key(app, code);
+                handle_server_form_key(app, code, modifiers);
                 return;
             }
             Popup::AuthForm(_) => {
@@ -302,7 +303,7 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
                 return;
             }
             Popup::NewAssignmentForm(_) => {
-                handle_new_assignment_form_key(app, code);
+                handle_new_assignment_form_key(app, code, modifiers);
                 return;
             }
             Popup::Scheduling(_) | Popup::Working(_) => {
@@ -405,8 +406,8 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
             if let Some(name) = server_names.get(app.server_selected) {
                 let entry = &app.config.servers[name];
                 let mut form = ServerForm::new();
-                form.name = name.clone();
-                form.url = entry.url.clone();
+                form.name = TextInput::from(name.clone());
+                form.url = TextInput::from(entry.url.clone());
                 form.verify_ssl = entry.verify_ssl;
                 form.editing_existing = Some(name.clone());
                 app.popup = Some(Popup::ServerForm(form));
@@ -1012,7 +1013,7 @@ fn handle_host_info_key(app: &mut App, code: KeyCode) {
     }
 }
 
-fn handle_server_form_key(app: &mut App, code: KeyCode) {
+fn handle_server_form_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     match code {
         KeyCode::Esc => {
             app.popup = None;
@@ -1032,16 +1033,54 @@ fn handle_server_form_key(app: &mut App, code: KeyCode) {
                 form.verify_ssl = !form.verify_ssl;
             }
         }
+        KeyCode::Left => {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(input) = form.active_input_mut() {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        input.move_word_left();
+                    } else {
+                        input.move_left();
+                    }
+                }
+        }
+        KeyCode::Right => {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(input) = form.active_input_mut() {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        input.move_word_right();
+                    } else {
+                        input.move_right();
+                    }
+                }
+        }
+        KeyCode::Home => {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(input) = form.active_input_mut() {
+                    input.move_home();
+                }
+        }
+        KeyCode::End => {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(input) = form.active_input_mut() {
+                    input.move_end();
+                }
+        }
+        KeyCode::Delete => {
+            if let Some(Popup::ServerForm(ref mut form)) = app.popup
+                && let Some(input) = form.active_input_mut() {
+                    input.delete();
+                }
+        }
         KeyCode::Backspace => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(val) = form.active_value_mut() {
-                    val.pop();
+                && let Some(input) = form.active_input_mut() {
+                    input.backspace();
                 }
         }
         KeyCode::Char(c) => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(val) = form.active_value_mut() {
-                    val.push(c);
+                && let Some(input) = form.active_input_mut() {
+                    input.insert(c);
                 }
         }
         KeyCode::Enter => {
@@ -1052,15 +1091,15 @@ fn handle_server_form_key(app: &mut App, code: KeyCode) {
                 }
 
                 if let Some(ref old_name) = form.editing_existing
-                    && *old_name != form.name {
+                    && *old_name != form.name.value {
                         app.config.remove_server(old_name);
                     }
 
-                let existing = app.config.servers.get(&form.name);
+                let existing = app.config.servers.get(&form.name.value);
                 app.config.add_server(
-                    form.name,
+                    form.name.value,
                     ServerEntry {
-                        url: form.url,
+                        url: form.url.value,
                         username: existing.and_then(|e| e.username.clone()),
                         password: existing.and_then(|e| e.password.clone()),
                         verify_ssl: form.verify_ssl,
@@ -1082,7 +1121,7 @@ fn handle_server_form_key(app: &mut App, code: KeyCode) {
     }
 }
 
-fn handle_auth_form_key(app: &mut App, code: KeyCode, _modifiers: KeyModifiers) {
+fn handle_auth_form_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     let is_register_prompt = matches!(&app.popup, Some(Popup::AuthForm(f)) if f.register_prompt);
 
     if is_register_prompt {
@@ -1114,20 +1153,60 @@ fn handle_auth_form_key(app: &mut App, code: KeyCode, _modifiers: KeyModifiers) 
                 form.active_field = form.active_field.prev();
             }
         }
+        KeyCode::Left => {
+            if let Some(Popup::AuthForm(ref mut form)) = app.popup {
+                let input = form.active_input_mut();
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    input.move_word_left();
+                } else {
+                    input.move_left();
+                }
+            }
+        }
+        KeyCode::Right => {
+            if let Some(Popup::AuthForm(ref mut form)) = app.popup {
+                let input = form.active_input_mut();
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    input.move_word_right();
+                } else {
+                    input.move_right();
+                }
+            }
+        }
+        KeyCode::Home => {
+            if let Some(Popup::AuthForm(ref mut form)) = app.popup {
+                form.active_input_mut().move_home();
+            }
+        }
+        KeyCode::End => {
+            if let Some(Popup::AuthForm(ref mut form)) = app.popup {
+                form.active_input_mut().move_end();
+            }
+        }
+        KeyCode::Delete => {
+            if let Some(Popup::AuthForm(ref mut form)) = app.popup {
+                form.active_input_mut().delete();
+            }
+        }
         KeyCode::Backspace => {
             if let Some(Popup::AuthForm(ref mut form)) = app.popup {
-                form.active_value_mut().pop();
+                form.active_input_mut().backspace();
             }
         }
         KeyCode::Char(c) => {
             if let Some(Popup::AuthForm(ref mut form)) = app.popup {
-                form.active_value_mut().push(c);
+                form.active_input_mut().insert(c);
             }
         }
         KeyCode::Enter => {
+            if let Some(Popup::AuthForm(ref mut form)) = app.popup
+                && !form.username.is_empty() && form.password.is_empty() {
+                    form.active_field = AuthFormField::Password;
+                    return;
+                }
             if let Some(Popup::AuthForm(form)) = app.popup.take() {
-                if form.username.is_empty() || form.password.is_empty() {
-                    app.popup = Some(Popup::Error("Username and Password are required".into()));
+                if form.username.is_empty() {
+                    app.popup = Some(Popup::Error("Username is required".into()));
                     return;
                 }
                 spawn_connect(app, form);
@@ -1182,7 +1261,7 @@ fn connect_selected_server(app: &mut App) {
         }
         (Some(u), None) => {
             let mut f = AuthForm::new(name.clone());
-            f.username = u.clone();
+            f.username = TextInput::from(u.clone());
             app.popup = Some(Popup::AuthForm(f));
         }
         _ => {
@@ -1193,8 +1272,8 @@ fn connect_selected_server(app: &mut App) {
 
 fn spawn_connect(app: &mut App, form: AuthForm) {
     let server_name = form.server_name.clone();
-    let username = form.username.clone();
-    let password = form.password.clone();
+    let username = form.username.value.clone();
+    let password = form.password.value.clone();
 
     let Some(entry) = app.config.servers.get(&server_name).cloned() else {
         app.set_error(format!("Server '{}' not found in config", server_name));
@@ -1255,8 +1334,8 @@ fn spawn_connect(app: &mut App, form: AuthForm) {
 
 fn spawn_register(app: &mut App, form: AuthForm) {
     let server_name = form.server_name.clone();
-    let username = form.username.clone();
-    let password = form.password.clone();
+    let username = form.username.value.clone();
+    let password = form.password.value.clone();
 
     let Some(entry) = app.config.servers.get(&server_name).cloned() else {
         app.set_error(format!("Server '{}' not found in config", server_name));
@@ -1328,16 +1407,20 @@ fn handle_connect_result(app: &mut App, cr: ConnectResult) {
         Ok(session) => {
             let server_name = cr.server_name.clone();
             if let Some(entry) = app.config.servers.get(&server_name).cloned() {
-                app.config.add_server(
-                    server_name.clone(),
-                    ServerEntry {
-                        url: entry.url,
-                        username: Some(cr.username),
-                        password: Some(cr.password),
-                        verify_ssl: entry.verify_ssl,
-                    },
-                );
-                let _ = app.config.save();
+                let creds_changed = entry.username.as_deref() != Some(&cr.username)
+                    || entry.password.as_deref() != Some(&cr.password);
+                if creds_changed {
+                    app.config.add_server(
+                        server_name.clone(),
+                        ServerEntry {
+                            url: entry.url,
+                            username: Some(cr.username),
+                            password: Some(cr.password),
+                            verify_ssl: entry.verify_ssl,
+                        },
+                    );
+                    let _ = app.config.save();
+                }
             }
 
             let existing = app
@@ -1382,7 +1465,7 @@ fn handle_connect_result(app: &mut App, cr: ConnectResult) {
                 app.popup = Some(Popup::AuthForm(form));
             } else {
                 let mut retry_form = AuthForm::new(cr.server_name);
-                retry_form.username = cr.username;
+                retry_form.username = TextInput::from(cr.username);
                 retry_form.error = Some(err.message);
                 app.popup = Some(Popup::AuthForm(retry_form));
             }
@@ -1483,7 +1566,7 @@ fn handle_assignment_picker_key(app: &mut App, code: KeyCode) {
     }
 }
 
-fn handle_new_assignment_form_key(app: &mut App, code: KeyCode) {
+fn handle_new_assignment_form_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     match code {
         KeyCode::Esc => {
             app.popup = None;
@@ -1503,20 +1586,58 @@ fn handle_new_assignment_form_key(app: &mut App, code: KeyCode) {
                 match form.active_field {
                     app::NewAssignmentField::Wipe => form.wipe = !form.wipe,
                     app::NewAssignmentField::Qinq => form.qinq = !form.qinq,
-                    app::NewAssignmentField::Description => form.description.push(' '),
+                    app::NewAssignmentField::Description => form.description.insert(' '),
                 }
             }
+        }
+        KeyCode::Left => {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        form.description.move_word_left();
+                    } else {
+                        form.description.move_left();
+                    }
+                }
+        }
+        KeyCode::Right => {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        form.description.move_word_right();
+                    } else {
+                        form.description.move_right();
+                    }
+                }
+        }
+        KeyCode::Home => {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
+                    form.description.move_home();
+                }
+        }
+        KeyCode::End => {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
+                    form.description.move_end();
+                }
+        }
+        KeyCode::Delete => {
+            if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
+                && form.active_field == app::NewAssignmentField::Description {
+                    form.description.delete();
+                }
         }
         KeyCode::Backspace => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
                 && form.active_field == app::NewAssignmentField::Description {
-                    form.description.pop();
+                    form.description.backspace();
                 }
         }
         KeyCode::Char(c) => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
                 && form.active_field == app::NewAssignmentField::Description {
-                    form.description.push(c);
+                    form.description.insert(c);
                 }
         }
         KeyCode::Enter => {
@@ -1581,7 +1702,7 @@ fn spawn_schedule_new_assignment(app: &mut App, form: NewAssignmentForm) {
     let (tx, rx) = oneshot::channel();
     app.pending_schedule = Some(rx);
 
-    let description = form.description.clone();
+    let description = form.description.value.clone();
     let qinq: i64 = if form.qinq { 1 } else { 0 };
     let wipe = form.wipe;
 

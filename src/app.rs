@@ -4,6 +4,121 @@ use crate::session::{Session, SessionManager};
 use std::collections::HashSet;
 use tokio::sync::oneshot;
 
+#[derive(Debug, Clone)]
+pub struct TextInput {
+    pub value: String,
+    pub cursor: usize,
+}
+
+impl TextInput {
+    pub fn new() -> Self {
+        Self { value: String::new(), cursor: 0 }
+    }
+
+    pub fn from(s: String) -> Self {
+        let cursor = s.len();
+        Self { value: s, cursor }
+    }
+
+    pub fn insert(&mut self, c: char) {
+        self.value.insert(self.cursor, c);
+        self.cursor += c.len_utf8();
+    }
+
+    pub fn backspace(&mut self) {
+        if self.cursor > 0 {
+            let prev = self.value[..self.cursor]
+                .char_indices()
+                .next_back()
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            self.value.remove(prev);
+            self.cursor = prev;
+        }
+    }
+
+    pub fn delete(&mut self) {
+        if self.cursor < self.value.len() {
+            self.value.remove(self.cursor);
+        }
+    }
+
+    pub fn move_left(&mut self) {
+        if self.cursor > 0 {
+            self.cursor = self.value[..self.cursor]
+                .char_indices()
+                .next_back()
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+        }
+    }
+
+    pub fn move_right(&mut self) {
+        if self.cursor < self.value.len() {
+            self.cursor += self.value[self.cursor..].chars().next().map(|c| c.len_utf8()).unwrap_or(0);
+        }
+    }
+
+    pub fn move_word_left(&mut self) {
+        let bytes = self.value.as_bytes();
+        let mut pos = self.cursor;
+        while pos > 0 && !bytes[pos - 1].is_ascii_alphanumeric() {
+            pos -= 1;
+        }
+        while pos > 0 && bytes[pos - 1].is_ascii_alphanumeric() {
+            pos -= 1;
+        }
+        self.cursor = pos;
+    }
+
+    pub fn move_word_right(&mut self) {
+        let bytes = self.value.as_bytes();
+        let len = bytes.len();
+        let mut pos = self.cursor;
+        while pos < len && bytes[pos].is_ascii_alphanumeric() {
+            pos += 1;
+        }
+        while pos < len && !bytes[pos].is_ascii_alphanumeric() {
+            pos += 1;
+        }
+        self.cursor = pos;
+    }
+
+    pub fn move_home(&mut self) {
+        self.cursor = 0;
+    }
+
+    pub fn move_end(&mut self) {
+        self.cursor = self.value.len();
+    }
+
+    pub fn before_cursor(&self) -> &str {
+        &self.value[..self.cursor]
+    }
+
+    pub fn char_at_cursor(&self) -> &str {
+        if self.cursor < self.value.len() {
+            let end = self.cursor + self.value[self.cursor..].chars().next().map(|c| c.len_utf8()).unwrap_or(0);
+            &self.value[self.cursor..end]
+        } else {
+            " "
+        }
+    }
+
+    pub fn after_cursor_char(&self) -> &str {
+        if self.cursor < self.value.len() {
+            let skip = self.value[self.cursor..].chars().next().map(|c| c.len_utf8()).unwrap_or(0);
+            &self.value[self.cursor + skip..]
+        } else {
+            ""
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
+}
+
 pub fn fuzzy_match(haystack: &str, needle: &str) -> bool {
     let mut hay = haystack.chars().flat_map(|c| c.to_lowercase());
     for nc in needle.chars().flat_map(|c| c.to_lowercase()) {
@@ -159,8 +274,8 @@ impl ServerFormField {
 
 #[derive(Debug)]
 pub struct ServerForm {
-    pub name: String,
-    pub url: String,
+    pub name: TextInput,
+    pub url: TextInput,
     pub verify_ssl: bool,
     pub active_field: ServerFormField,
     pub editing_existing: Option<String>,
@@ -169,15 +284,15 @@ pub struct ServerForm {
 impl ServerForm {
     pub fn new() -> Self {
         Self {
-            name: String::new(),
-            url: String::new(),
+            name: TextInput::new(),
+            url: TextInput::new(),
             verify_ssl: true,
             active_field: ServerFormField::Name,
             editing_existing: None,
         }
     }
 
-    pub fn active_value_mut(&mut self) -> Option<&mut String> {
+    pub fn active_input_mut(&mut self) -> Option<&mut TextInput> {
         match self.active_field {
             ServerFormField::Name => Some(&mut self.name),
             ServerFormField::Url => Some(&mut self.url),
@@ -211,8 +326,8 @@ impl AuthFormField {
 #[derive(Debug)]
 pub struct AuthForm {
     pub server_name: String,
-    pub username: String,
-    pub password: String,
+    pub username: TextInput,
+    pub password: TextInput,
     pub active_field: AuthFormField,
     pub error: Option<String>,
     pub register_prompt: bool,
@@ -222,8 +337,8 @@ impl AuthForm {
     pub fn new(server_name: String) -> Self {
         Self {
             server_name,
-            username: String::new(),
-            password: String::new(),
+            username: TextInput::new(),
+            password: TextInput::new(),
             active_field: AuthFormField::Username,
             error: None,
             register_prompt: false,
@@ -233,15 +348,15 @@ impl AuthForm {
     pub fn with_credentials(server_name: String, username: String, password: String) -> Self {
         Self {
             server_name,
-            username,
-            password,
+            username: TextInput::from(username),
+            password: TextInput::from(password),
             active_field: AuthFormField::Username,
             error: None,
             register_prompt: false,
         }
     }
 
-    pub fn active_value_mut(&mut self) -> &mut String {
+    pub fn active_input_mut(&mut self) -> &mut TextInput {
         match self.active_field {
             AuthFormField::Username => &mut self.username,
             AuthFormField::Password => &mut self.password,
@@ -324,7 +439,7 @@ impl NewAssignmentField {
 #[derive(Debug)]
 pub struct NewAssignmentForm {
     pub selected_hosts: Vec<String>,
-    pub description: String,
+    pub description: TextInput,
     pub qinq: bool,
     pub wipe: bool,
     pub active_field: NewAssignmentField,
@@ -334,7 +449,7 @@ impl NewAssignmentForm {
     pub fn new(selected_hosts: Vec<String>) -> Self {
         Self {
             selected_hosts,
-            description: String::new(),
+            description: TextInput::new(),
             qinq: false,
             wipe: true,
             active_field: NewAssignmentField::Description,

@@ -48,8 +48,57 @@ impl AppConfig {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let content = toml::to_string_pretty(self)?;
-        std::fs::write(&path, content)?;
+
+        let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
+            existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
+        } else {
+            toml_edit::DocumentMut::default()
+        };
+
+        match &self.default_server {
+            Some(s) => { doc["default_server"] = toml_edit::value(s.as_str()); }
+            None => { doc.remove("default_server"); }
+        }
+
+        if self.servers.is_empty() {
+            doc.remove("servers");
+        } else {
+            let servers = doc.entry("servers").or_insert_with(|| {
+                let mut t = toml_edit::Table::new();
+                t.set_implicit(true);
+                toml_edit::Item::Table(t)
+            });
+            if let Some(tbl) = servers.as_table_mut() {
+                tbl.set_implicit(true);
+                let existing_keys: Vec<String> = tbl.iter().map(|(k, _)| k.to_string()).collect();
+                for k in &existing_keys {
+                    if !self.servers.contains_key(k.as_str()) {
+                        tbl.remove(k);
+                    }
+                }
+
+                for (name, entry) in &self.servers {
+                    let is_new = !tbl.contains_key(name);
+                    let server = tbl.entry(name).or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
+                    if let Some(st) = server.as_table_mut() {
+                        st["url"] = toml_edit::value(&entry.url);
+                        match &entry.username {
+                            Some(u) => { st["username"] = toml_edit::value(u.as_str()); }
+                            None => { st.remove("username"); }
+                        }
+                        match &entry.password {
+                            Some(p) => { st["password"] = toml_edit::value(p.as_str()); }
+                            None => { st.remove("password"); }
+                        }
+                        if is_new {
+                            st["verify_ssl"] = toml_edit::value(entry.verify_ssl);
+                        }
+                    }
+                }
+            }
+        }
+
+        std::fs::write(&path, doc.to_string())?;
         Ok(())
     }
 
