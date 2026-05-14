@@ -1069,6 +1069,12 @@ fn handle_server_form_key(app: &mut App, code: KeyCode) {
 
                 if let Err(e) = app.config.save() {
                     app.popup = Some(Popup::Error(format!("Failed to save config: {}", e)));
+                    return;
+                }
+
+                if app.sessions.active_session().is_none() {
+                    app.server_selected = app.config.servers.len() - 1;
+                    connect_selected_server(app);
                 }
             }
         }
