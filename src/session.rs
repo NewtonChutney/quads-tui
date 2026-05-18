@@ -2,6 +2,7 @@ use crate::api::models::*;
 use crate::api::ApiClient;
 use crate::config::ServerEntry;
 use anyhow::Result;
+use std::collections::HashMap;
 
 pub struct Session {
     pub name: String,
@@ -74,46 +75,49 @@ impl Session {
 }
 
 pub struct SessionManager {
-    pub sessions: Vec<Session>,
-    pub active: Option<usize>,
+    pub sessions: HashMap<String, Session>,
+    pub active_server: Option<String>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: Vec::new(),
-            active: None,
+            sessions: HashMap::new(),
+            active_server: None,
         }
     }
 
     pub fn active_session(&self) -> Option<&Session> {
-        self.active.and_then(|i| self.sessions.get(i))
+        self.active_server.as_ref().and_then(|name| self.sessions.get(name))
     }
 
     pub fn active_session_mut(&mut self) -> Option<&mut Session> {
-        self.active.and_then(|i| self.sessions.get_mut(i))
+        self.active_server.as_ref().cloned().and_then(|name| self.sessions.get_mut(&name))
     }
 
-    pub fn add_session(&mut self, session: Session) -> usize {
-        let idx = self.sessions.len();
-        self.sessions.push(session);
-        if self.active.is_none() {
-            self.active = Some(idx);
+    pub fn add_session(&mut self, session: Session) {
+        let name = session.name.clone();
+        self.sessions.insert(name.clone(), session);
+        if self.active_server.is_none() {
+            self.active_server = Some(name);
         }
-        idx
     }
 
-    pub fn switch_to(&mut self, index: usize) -> bool {
-        if index < self.sessions.len() {
-            self.active = Some(index);
+    pub fn switch_to(&mut self, name: &str) -> bool {
+        if self.sessions.contains_key(name) {
+            self.active_server = Some(name.to_string());
             true
         } else {
             false
         }
     }
 
-    pub fn session_count(&self) -> usize {
-        self.sessions.len()
+    pub fn get_session(&self, name: &str) -> Option<&Session> {
+        self.sessions.get(name)
+    }
+
+    pub fn get_session_mut(&mut self, name: &str) -> Option<&mut Session> {
+        self.sessions.get_mut(name)
     }
 
 }

@@ -150,11 +150,11 @@ pub struct ConnectError {
 }
 
 pub enum RefreshUpdate {
-    Hosts(usize, Vec<Host>),
-    Clouds(usize, Vec<Cloud>),
-    CloudSummaries(usize, Vec<CloudSummary>),
-    Assignments(usize, Vec<Assignment>),
-    Schedules(usize, Vec<Schedule>),
+    Hosts(String, Vec<Host>),
+    Clouds(String, Vec<Cloud>),
+    CloudSummaries(String, Vec<CloudSummary>),
+    Assignments(String, Vec<Assignment>),
+    Schedules(String, Vec<Schedule>),
     Error(String),
     Done,
 }

@@ -119,8 +119,8 @@ async fn main() -> Result<()> {
                 app.server_selected = idx;
             }
             if let Ok(session) = Session::new(default_name, &entry) {
-                let idx = app.sessions.add_session(session);
-                app.sessions.switch_to(idx);
+                app.sessions.add_session(session);
+                app.sessions.switch_to(default_name);
                 spawn_refresh(&mut app);
             }
         }
@@ -197,29 +197,29 @@ async fn main() -> Result<()> {
                     if let Some(ref mut rx) = app.refresh_rx {
                         while let Ok(update) = rx.try_recv() {
                             match update {
-                                RefreshUpdate::Hosts(idx, data) => {
-                                    if let Some(s) = app.sessions.sessions.get_mut(idx) {
+                                RefreshUpdate::Hosts(server_name, data) => {
+                                    if let Some(s) = app.sessions.get_session_mut(&server_name) {
                                         s.hosts = data;
                                     }
                                 }
-                                RefreshUpdate::Clouds(idx, data) => {
-                                    if let Some(s) = app.sessions.sessions.get_mut(idx) {
+                                RefreshUpdate::Clouds(server_name, data) => {
+                                    if let Some(s) = app.sessions.get_session_mut(&server_name) {
                                         s.clouds = data;
                                     }
                                 }
-                                RefreshUpdate::CloudSummaries(idx, data) => {
-                                    if let Some(s) = app.sessions.sessions.get_mut(idx) {
+                                RefreshUpdate::CloudSummaries(server_name, data) => {
+                                    if let Some(s) = app.sessions.get_session_mut(&server_name) {
                                         s.cloud_summaries = data;
                                     }
                                 }
-                                RefreshUpdate::Assignments(idx, data) => {
-                                    if let Some(s) = app.sessions.sessions.get_mut(idx) {
+                                RefreshUpdate::Assignments(server_name, data) => {
+                                    if let Some(s) = app.sessions.get_session_mut(&server_name) {
                                         s.assignments = data;
                                         recalc_my_assignments(s);
                                     }
                                 }
-                                RefreshUpdate::Schedules(idx, data) => {
-                                    if let Some(s) = app.sessions.sessions.get_mut(idx) {
+                                RefreshUpdate::Schedules(server_name, data) => {
+                                    if let Some(s) = app.sessions.get_session_mut(&server_name) {
                                         s.schedules = data;
                                     }
                                 }
@@ -409,16 +409,11 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
                     app.config.default_server = Some(name.clone());
                     let _ = app.config.save();
 
-                    let existing = app
-                        .sessions
-                        .sessions
-                        .iter()
-                        .position(|s| s.name == name);
-                    if let Some(idx) = existing {
-                        app.sessions.switch_to(idx);
+                    if app.sessions.sessions.contains_key(&name) {
+                        app.sessions.switch_to(&name);
                     } else if let Ok(session) = Session::new(&name, &entry) {
-                        let idx = app.sessions.add_session(session);
-                        app.sessions.switch_to(idx);
+                        app.sessions.add_session(session);
+                        app.sessions.switch_to(&name);
                         spawn_refresh(app);
                     }
                     app.status_message = Some(format!("Selected {}", name));
@@ -1249,14 +1244,10 @@ fn connect_selected_server(app: &mut App) {
         return;
     };
 
-    let already_connected = app
-        .sessions
-        .sessions
-        .iter()
-        .position(|s| s.name == *name && s.connected);
-
-    if let Some(idx) = already_connected {
-        app.sessions.switch_to(idx);
+    if let Some(session) = app.sessions.get_session(name)
+        && session.connected
+    {
+        app.sessions.switch_to(name);
         app.status_message = Some(format!("Switched to {}", name));
         return;
     }
@@ -1266,19 +1257,14 @@ fn connect_selected_server(app: &mut App) {
     app.config.default_server = Some(name.clone());
     let _ = app.config.save();
 
-    let existing = app
-        .sessions
-        .sessions
-        .iter()
-        .position(|s| s.name == *name);
-    if existing.is_none() {
+    if !app.sessions.sessions.contains_key(name) {
         if let Ok(session) = Session::new(name, &entry) {
-            let idx = app.sessions.add_session(session);
-            app.sessions.switch_to(idx);
+            app.sessions.add_session(session);
+            app.sessions.switch_to(name);
             spawn_refresh(app);
         }
-    } else if let Some(idx) = existing {
-        app.sessions.switch_to(idx);
+    } else {
+        app.sessions.switch_to(name);
     }
 
     match (&entry.username, &entry.password) {
@@ -1450,32 +1436,28 @@ fn handle_connect_result(app: &mut App, cr: ConnectResult) {
                 }
             }
 
-            let existing = app
+            let had_data = app
                 .sessions
-                .sessions
-                .iter()
-                .position(|s| s.name == server_name);
-            let had_data = existing
-                .and_then(|i| app.sessions.sessions.get(i))
+                .get_session(&server_name)
                 .map(|s| !s.hosts.is_empty())
                 .unwrap_or(false);
 
-            let idx = if let Some(i) = existing {
-                let old = &mut app.sessions.sessions[i];
+            if let Some(old) = app.sessions.get_session_mut(&server_name) {
                 old.connected = session.connected;
                 old.user_email = session.user_email.clone();
                 old.is_admin = session.is_admin;
                 old.version = session.version.clone();
                 old.client = session.client.clone();
-                i
             } else {
-                app.sessions.add_session(session)
-            };
-            app.sessions.switch_to(idx);
+                app.sessions.add_session(session);
+            }
+            app.sessions.switch_to(&server_name);
             app.popup = Some(Popup::ConnectSuccess(server_name.clone(), app.tick));
             app.status_message = Some(format!("Connected to {}", server_name));
 
-            recalc_my_assignments(&mut app.sessions.sessions[idx]);
+            if let Some(session) = app.sessions.get_session_mut(&server_name) {
+                recalc_my_assignments(session);
+            }
             if !had_data {
                 spawn_refresh(app);
             }
@@ -1797,10 +1779,10 @@ fn disconnect_current(app: &mut App) {
 fn spawn_refresh(app: &mut App) {
     app.refresh_rx = None;
 
-    let Some(idx) = app.sessions.active else {
+    let Some(server_name) = app.sessions.active_server.clone() else {
         return;
     };
-    let Some(session) = app.sessions.sessions.get(idx) else {
+    let Some(session) = app.sessions.get_session(&server_name) else {
         return;
     };
 
@@ -1813,9 +1795,10 @@ fn spawn_refresh(app: &mut App) {
     tokio::spawn(async move {
         let tx1 = tx.clone();
         let c1 = client.clone();
+        let server_name1 = server_name.clone();
         let h1 = tokio::spawn(async move {
             match c1.get_hosts(None).await {
-                Ok(data) => { let _ = tx1.send(RefreshUpdate::Hosts(idx, data)).await; }
+                Ok(data) => { let _ = tx1.send(RefreshUpdate::Hosts(server_name1, data)).await; }
                 Err(e) => {
                     log::error!("refresh hosts failed: {}", e);
                     let _ = tx1.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1825,9 +1808,10 @@ fn spawn_refresh(app: &mut App) {
 
         let tx2 = tx.clone();
         let c2 = client.clone();
+        let server_name2 = server_name.clone();
         let h2 = tokio::spawn(async move {
             match c2.get_clouds().await {
-                Ok(data) => { let _ = tx2.send(RefreshUpdate::Clouds(idx, data)).await; }
+                Ok(data) => { let _ = tx2.send(RefreshUpdate::Clouds(server_name2, data)).await; }
                 Err(e) => {
                     log::error!("refresh clouds failed: {}", e);
                     let _ = tx2.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1837,9 +1821,10 @@ fn spawn_refresh(app: &mut App) {
 
         let tx3 = tx.clone();
         let c3 = client.clone();
+        let server_name3 = server_name.clone();
         let h3 = tokio::spawn(async move {
             match c3.get_cloud_summary().await {
-                Ok(data) => { let _ = tx3.send(RefreshUpdate::CloudSummaries(idx, data)).await; }
+                Ok(data) => { let _ = tx3.send(RefreshUpdate::CloudSummaries(server_name3, data)).await; }
                 Err(e) => {
                     log::error!("refresh cloud summaries failed: {}", e);
                     let _ = tx3.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1849,9 +1834,10 @@ fn spawn_refresh(app: &mut App) {
 
         let tx4 = tx.clone();
         let c4 = client.clone();
+        let server_name4 = server_name.clone();
         let h4 = tokio::spawn(async move {
             match c4.get_active_assignments().await {
-                Ok(data) => { let _ = tx4.send(RefreshUpdate::Assignments(idx, data)).await; }
+                Ok(data) => { let _ = tx4.send(RefreshUpdate::Assignments(server_name4, data)).await; }
                 Err(e) => {
                     log::error!("refresh assignments failed: {}", e);
                     let _ = tx4.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1861,9 +1847,10 @@ fn spawn_refresh(app: &mut App) {
 
         let tx5 = tx.clone();
         let c5 = client.clone();
+        let server_name5 = server_name.clone();
         let h5 = tokio::spawn(async move {
             match c5.get_current_schedules(None).await {
-                Ok(data) => { let _ = tx5.send(RefreshUpdate::Schedules(idx, data)).await; }
+                Ok(data) => { let _ = tx5.send(RefreshUpdate::Schedules(server_name5, data)).await; }
                 Err(e) => {
                     log::error!("refresh schedules failed: {}", e);
                     let _ = tx5.send(RefreshUpdate::Error(e.to_string())).await;

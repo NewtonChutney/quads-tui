@@ -56,11 +56,10 @@ fn render_server_widget(f: &mut Frame, area: Rect, app: &App) {
             let entry = &app.config.servers[name];
             let connected = app
                 .sessions
-                .sessions
-                .iter()
-                .any(|s| s.name == *name && s.connected);
+                .get_session(name)
+                .is_some_and(|s| s.connected);
 
-            let has_session = app.sessions.sessions.iter().any(|s| s.name == *name);
+            let has_session = app.sessions.sessions.contains_key(name);
 
             let (status_icon, status_color, status_label) = if connected {
                 ("\u{25cf}", Color::Green, " connected")

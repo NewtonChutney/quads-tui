@@ -36,23 +36,6 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         ));
     }
 
-    if app.sessions.session_count() > 1 {
-        spans.push(Span::raw(" "));
-        for (i, s) in app.sessions.sessions.iter().enumerate() {
-            let is_active = app.sessions.active == Some(i);
-            let style = if is_active {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else if s.connected {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-            spans.push(Span::styled(format!("[S{}]", i + 1), style));
-        }
-    }
 
     // QUADS TUI version
     let mut right_spans = vec![Span::styled(
