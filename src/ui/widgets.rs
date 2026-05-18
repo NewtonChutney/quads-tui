@@ -208,9 +208,18 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
         "auto-refresh"
     };
     right_spans.extend(key_hint("x", ar_label));
+    right_spans.push(Span::raw(" "));
+    right_spans.push(Span::styled(
+        "[j/k/⬆/⬇]",
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+    ));
+    right_spans.push(Span::styled(
+        " navigate",
+        Style::default().fg(Color::Gray),
+    ));
 
-    let left_width: usize = spans.iter().map(|s| s.content.len()).sum();
-    let right_width: usize = right_spans.iter().map(|s| s.content.len()).sum();
+    let left_width: usize = spans.iter().map(|s| s.width()).sum();
+    let right_width: usize = right_spans.iter().map(|s| s.width()).sum();
     let total_width = area.width as usize;
     let pad = total_width.saturating_sub(left_width + right_width);
     spans.push(Span::raw(" ".repeat(pad)));
@@ -262,6 +271,13 @@ pub fn render_tab_bar(f: &mut Frame, area: Rect, active: Screen) {
             }
         }
     }
+
+    spans.push(Span::raw("  "));
+    spans.push(Span::styled(
+        "[⬅/➡]",
+        Style::default().fg(Color::DarkGray),
+    ));
+    spans.push(Span::raw("switch tab"));
 
     let bar = Paragraph::new(Line::from(spans));
     f.render_widget(bar, area);
