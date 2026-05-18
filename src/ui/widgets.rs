@@ -23,8 +23,9 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::raw(format!(" {} ", session.name)));
 
         if let Some(ref v) = session.version {
+            // QUADS server version
             spans.push(Span::styled(
-                format!("(v{}) ", v),
+                format!("({}) ", v),
                 Style::default().fg(Color::DarkGray),
             ));
         }
@@ -53,6 +54,7 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    // QUADS TUI version
     let mut right_spans = vec![Span::styled(
         format!("v{}", crate::update::VERSION),
         Style::default().fg(Color::DarkGray),

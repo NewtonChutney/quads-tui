@@ -345,7 +345,7 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         }
     }
 
-    if code == KeyCode::Char('U')
+    if matches!(code, KeyCode::Char('U' | 'u'))
         && let Some(ref info) = app.update_available {
             let url = info.download_url.clone();
             let ver = info.latest_version.clone();
@@ -366,12 +366,12 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
     let server_count = app.config.servers.len();
 
     match code {
-        KeyCode::Char('q') => app.running = false,
-        KeyCode::Char('h') => app.navigate(Screen::Hosts),
-        KeyCode::Char('a') => app.navigate(Screen::Assignments),
-        KeyCode::Char('c') => app.navigate(Screen::Clouds),
-        KeyCode::Char('r') => spawn_refresh(app),
-        KeyCode::Char('x') => {
+        KeyCode::Char('q' | 'Q') => app.running = false,
+        KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
+        KeyCode::Char('a' | 'A') => app.navigate(Screen::Assignments),
+        KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
+        KeyCode::Char('r' | 'R') => spawn_refresh(app),
+        KeyCode::Char('x' | 'X') => {
             app.auto_refresh = !app.auto_refresh;
         }
         KeyCode::Up | KeyCode::Char('k')
@@ -504,12 +504,12 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
                 app.go_back();
             }
         }
-        KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k')
+        KeyCode::Char('q' | 'Q') => app.running = false,
+        KeyCode::Up | KeyCode::Char('k' | 'K')
             if app.host_selected > 0 => {
                 app.host_selected -= 1;
             }
-        KeyCode::Down | KeyCode::Char('j')
+        KeyCode::Down | KeyCode::Char('j' | 'J')
             if host_count > 0 && app.host_selected < host_count - 1 => {
                 app.host_selected += 1;
             }
@@ -536,7 +536,7 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
             app.host_self_schedule_only = !app.host_self_schedule_only;
             app.host_selected = 0;
         }
-        KeyCode::Char('f') if !app.host_self_schedule_only => {
+        KeyCode::Char('f' | 'F') if !app.host_self_schedule_only => {
             app.popup = Some(Popup::HostFilter(HostFilterPopup {
                 cursor: 0,
                 flags: app.host_filters.clone(),
@@ -566,16 +566,16 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
                 }
             }
         }
-        KeyCode::Char('s') => {
+        KeyCode::Char('s' | 'S') => {
             open_assignment_picker(app);
         }
-        KeyCode::Char('r') => spawn_refresh(app),
-        KeyCode::Char('x') => {
+        KeyCode::Char('r' | 'R') => spawn_refresh(app),
+        KeyCode::Char('x' | 'X') => {
             app.auto_refresh = !app.auto_refresh;
         }
-        KeyCode::Char('d') => app.navigate(Screen::Dashboard),
-        KeyCode::Char('a') => app.navigate(Screen::Assignments),
-        KeyCode::Char('c') => app.navigate(Screen::Clouds),
+        KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
+        KeyCode::Char('a' | 'A') => app.navigate(Screen::Assignments),
+        KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
@@ -713,7 +713,7 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                     }
                 }
             }
-            KeyCode::Char('u') => {
+            KeyCode::Char('u' | 'U') => {
                 if let Some(session) = app.sessions.active_session() {
                     let assignment = get_selected_assignment(app, session);
                     if let Some(assignment) = assignment {
@@ -733,10 +733,10 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                     }
                 }
             }
-            KeyCode::Char('q') => app.running = false,
-            KeyCode::Char('d') => app.navigate(Screen::Dashboard),
-            KeyCode::Char('h') => app.navigate(Screen::Hosts),
-            KeyCode::Char('c') => app.navigate(Screen::Clouds),
+            KeyCode::Char('q' | 'Q') => app.running = false,
+            KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
+            KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
+            KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
             KeyCode::Right => app.navigate(app.screen.next()),
             KeyCode::Left => app.navigate(app.screen.prev()),
             _ => {}
@@ -753,13 +753,13 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                 app.go_back();
             }
         }
-        KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k')
+        KeyCode::Char('q' | 'Q') => app.running = false,
+        KeyCode::Up | KeyCode::Char('k' | 'K')
             if app.assignment_selected > 0 => {
                 app.assignment_selected -= 1;
                 app.assignment_detail_selected = None;
             }
-        KeyCode::Down | KeyCode::Char('j')
+        KeyCode::Down | KeyCode::Char('j' | 'J')
             if assignment_count > 0 && app.assignment_selected < assignment_count - 1 => {
                 app.assignment_selected += 1;
                 app.assignment_detail_selected = None;
@@ -795,7 +795,7 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             app.assignment_selected = 0;
             app.assignment_detail_selected = None;
         }
-        KeyCode::Char('t') => {
+        KeyCode::Char('t' | 'T') => {
             if let Some(session) = app.sessions.active_session() {
                 let assignments = if app.assignment_show_all {
                     &session.assignments
