@@ -196,7 +196,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
     right_spans.extend(key_hint("x", ar_label));
     right_spans.push(Span::raw(" "));
     right_spans.push(Span::styled(
-        "[j/k/⬆/⬇]",
+        "[j/k/⬆️/⬇️]",
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
@@ -257,7 +257,10 @@ pub fn render_tab_bar(f: &mut Frame, area: Rect, active: Screen) {
     }
 
     spans.push(Span::raw("  "));
-    spans.push(Span::styled("[⬅/➡]", Style::default().fg(Color::DarkGray)));
+    spans.push(Span::styled(
+        "[⬅️/➡️]",
+        Style::default().fg(Color::DarkGray),
+    ));
     spans.push(Span::raw("switch tab"));
 
     let bar = Paragraph::new(Line::from(spans));
