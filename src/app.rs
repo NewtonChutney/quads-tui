@@ -12,7 +12,10 @@ pub struct TextInput {
 
 impl TextInput {
     pub fn new() -> Self {
-        Self { value: String::new(), cursor: 0 }
+        Self {
+            value: String::new(),
+            cursor: 0,
+        }
     }
 
     pub fn from(s: String) -> Self {
@@ -55,7 +58,11 @@ impl TextInput {
 
     pub fn move_right(&mut self) {
         if self.cursor < self.value.len() {
-            self.cursor += self.value[self.cursor..].chars().next().map(|c| c.len_utf8()).unwrap_or(0);
+            self.cursor += self.value[self.cursor..]
+                .chars()
+                .next()
+                .map(|c| c.len_utf8())
+                .unwrap_or(0);
         }
     }
 
@@ -98,7 +105,12 @@ impl TextInput {
 
     pub fn char_at_cursor(&self) -> &str {
         if self.cursor < self.value.len() {
-            let end = self.cursor + self.value[self.cursor..].chars().next().map(|c| c.len_utf8()).unwrap_or(0);
+            let end = self.cursor
+                + self.value[self.cursor..]
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(0);
             &self.value[self.cursor..end]
         } else {
             " "
@@ -107,7 +119,11 @@ impl TextInput {
 
     pub fn after_cursor_char(&self) -> &str {
         if self.cursor < self.value.len() {
-            let skip = self.value[self.cursor..].chars().next().map(|c| c.len_utf8()).unwrap_or(0);
+            let skip = self.value[self.cursor..]
+                .chars()
+                .next()
+                .map(|c| c.len_utf8())
+                .unwrap_or(0);
             &self.value[self.cursor + skip..]
         } else {
             ""
@@ -225,12 +241,7 @@ impl HostFilterFlags {
         }
     }
 
-    pub const LABELS: [&str; 4] = [
-        "Available",
-        "Scheduled",
-        "Broken",
-        "Retired",
-    ];
+    pub const LABELS: [&str; 4] = ["Available", "Scheduled", "Broken", "Retired"];
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -492,6 +503,7 @@ pub enum Popup {
     Working(String),
     UpdateComplete(String),
     Error(String),
+    ConfigHelp,
 }
 
 pub struct App {
@@ -610,11 +622,7 @@ impl App {
             return Vec::new();
         };
         let scheduled_hosts: HashSet<&str> = if self.host_self_schedule_only {
-            session
-                .schedules
-                .iter()
-                .map(|s| s.host_name())
-                .collect()
+            session.schedules.iter().map(|s| s.host_name()).collect()
         } else {
             HashSet::new()
         };
@@ -624,9 +632,10 @@ impl App {
             .iter()
             .filter(|h| {
                 if let Some(ref search) = self.host_search
-                    && !fuzzy_match(&h.name, search) {
-                        return false;
-                    }
+                    && !fuzzy_match(&h.name, search)
+                {
+                    return false;
+                }
 
                 if self.host_self_schedule_only {
                     return h.can_self_schedule == Some(true)
@@ -642,12 +651,10 @@ impl App {
 
                 let is_broken = h.broken == Some(true);
                 let is_retired = h.retired == Some(true) && !is_broken;
-                let is_available = !is_broken
-                    && !is_retired
-                    && h.cloud_name() == h.default_cloud_name();
-                let is_scheduled = !is_broken
-                    && !is_retired
-                    && h.cloud_name() != h.default_cloud_name();
+                let is_available =
+                    !is_broken && !is_retired && h.cloud_name() == h.default_cloud_name();
+                let is_scheduled =
+                    !is_broken && !is_retired && h.cloud_name() != h.default_cloud_name();
 
                 let f = &self.host_filters;
                 let none_selected = !f.available && !f.scheduled && !f.broken && !f.retired;

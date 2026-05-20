@@ -22,10 +22,10 @@ use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use event::{Event, EventHandler};
+use fs2::FileExt;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use session::Session;
-use fs2::FileExt;
 use simplelog::{LevelFilter, WriteLogger};
 use std::fs::File;
 use std::io;
@@ -33,6 +33,37 @@ use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
 
 const AUTO_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+
+fn get_log_path_display() -> String {
+    let log_path = config::AppConfig::config_dir().join("quads-tui.log");
+
+    // Format path for display, replacing home directory with ~ on Unix-like systems
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(home) = dirs::home_dir()
+            && let Ok(relative) = log_path.strip_prefix(&home)
+        {
+            return format!("~/{}", relative.display());
+        }
+    }
+
+    log_path.display().to_string()
+}
+
+fn open_in_file_manager(path: &std::path::Path) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(path).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer").arg(path).spawn();
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -42,7 +73,10 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if args.iter().any(|a| a == "--help" || a == "-h") {
-        println!("quads-tui {} — Terminal UI for QUADS bare-metal scheduling", update::VERSION);
+        println!(
+            "quads-tui {} — Terminal UI for QUADS bare-metal scheduling",
+            update::VERSION
+        );
         println!();
         println!("USAGE:");
         println!("    quads-tui [OPTIONS]");
@@ -57,16 +91,24 @@ async fn main() -> Result<()> {
         println!("    RUST_LOG         Set log level (default: info, e.g. RUST_LOG=debug)");
         println!();
         println!("CONFIG:");
+        #[cfg(target_os = "macos")]
+        println!("    ~/Library/Application Support/quads/quads-tui.toml");
+        #[cfg(target_os = "linux")]
         println!("    ~/.config/quads/quads-tui.toml");
+        #[cfg(target_os = "windows")]
+        println!("    %APPDATA%\\quads\\quads-tui.toml");
         println!();
         println!("LOGS:");
+        #[cfg(target_os = "macos")]
+        println!("    ~/Library/Application Support/quads/quads-tui.log");
+        #[cfg(target_os = "linux")]
         println!("    ~/.config/quads/quads-tui.log");
+        #[cfg(target_os = "windows")]
+        println!("    %APPDATA%\\quads\\quads-tui.log");
         return Ok(());
     }
 
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("quads");
+    let config_dir = config::AppConfig::config_dir();
     std::fs::create_dir_all(&config_dir)?;
 
     let lock_file = File::create(config_dir.join("quads-tui.lock"))?;
@@ -113,17 +155,18 @@ async fn main() -> Result<()> {
     }
 
     if let Some(ref default_name) = app.config.default_server.clone()
-        && let Some(entry) = app.config.servers.get(default_name).cloned() {
-            let server_names: Vec<String> = app.config.servers.keys().cloned().collect();
-            if let Some(idx) = server_names.iter().position(|n| n == default_name) {
-                app.server_selected = idx;
-            }
-            if let Ok(session) = Session::new(default_name, &entry) {
-                app.sessions.add_session(session);
-                app.sessions.switch_to(default_name);
-                spawn_refresh(&mut app);
-            }
+        && let Some(entry) = app.config.servers.get(default_name).cloned()
+    {
+        let server_names: Vec<String> = app.config.servers.keys().cloned().collect();
+        if let Some(idx) = server_names.iter().position(|n| n == default_name) {
+            app.server_selected = idx;
         }
+        if let Ok(session) = Session::new(default_name, &entry) {
+            app.sessions.add_session(session);
+            app.sessions.switch_to(default_name);
+            spawn_refresh(&mut app);
+        }
+    }
 
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
@@ -161,36 +204,41 @@ async fn main() -> Result<()> {
                 app.tick = app.tick.wrapping_add(1);
 
                 if let Some(ref mut rx) = app.pending_connect
-                    && let Ok(result) = rx.try_recv() {
-                        app.pending_connect = None;
-                        handle_connect_result(&mut app, result);
-                    }
+                    && let Ok(result) = rx.try_recv()
+                {
+                    app.pending_connect = None;
+                    handle_connect_result(&mut app, result);
+                }
 
                 if let Some(ref mut rx) = app.pending_schedule
-                    && let Ok(result) = rx.try_recv() {
-                        app.pending_schedule = None;
-                        handle_schedule_result(&mut app, result);
-                    }
+                    && let Ok(result) = rx.try_recv()
+                {
+                    app.pending_schedule = None;
+                    handle_schedule_result(&mut app, result);
+                }
 
                 if let Some(ref mut rx) = app.pending_action
-                    && let Ok(result) = rx.try_recv() {
-                        app.pending_action = None;
-                        handle_action_result(&mut app, result);
-                    }
+                    && let Ok(result) = rx.try_recv()
+                {
+                    app.pending_action = None;
+                    handle_action_result(&mut app, result);
+                }
 
                 if let Some(ref mut rx) = app.update_rx
-                    && let Ok(result) = rx.try_recv() {
-                        app.update_rx = None;
-                        if let Some(info) = result {
-                            log::info!("update available: v{}", info.latest_version);
-                            app.update_available = Some(info);
-                        }
+                    && let Ok(result) = rx.try_recv()
+                {
+                    app.update_rx = None;
+                    if let Some(info) = result {
+                        log::info!("update available: v{}", info.latest_version);
+                        app.update_available = Some(info);
                     }
+                }
 
                 if let Some(Popup::ConnectSuccess(_, start_tick)) = &app.popup
-                    && app.tick.wrapping_sub(*start_tick) >= 4 {
-                        app.popup = None;
-                    }
+                    && app.tick.wrapping_sub(*start_tick) >= 4
+                {
+                    app.popup = None;
+                }
 
                 {
                     let mut refresh_done = false;
@@ -225,12 +273,19 @@ async fn main() -> Result<()> {
                                 }
                                 RefreshUpdate::Error(msg) => {
                                     if app.popup.is_none() {
+                                        let log_path = get_log_path_display();
                                         let hint = if msg.contains("error sending request") {
-                                            "\n\nServer unreachable, check connectivity.\nSee ~/.config/quads/quads-tui.log for details."
+                                            format!(
+                                                "\n\nServer unreachable, check connectivity.\nSee {} for details.",
+                                                log_path
+                                            )
                                         } else {
-                                            "\nSee ~/.config/quads/quads-tui.log for details."
+                                            format!("\nSee {} for details.", log_path)
                                         };
-                                        app.popup = Some(Popup::Error(format!("Data refresh failed: {}{}", msg, hint)));
+                                        app.popup = Some(Popup::Error(format!(
+                                            "Data refresh failed: {}{}",
+                                            msg, hint
+                                        )));
                                     }
                                 }
                                 RefreshUpdate::Done => {
@@ -336,6 +391,32 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
             Popup::Scheduling(_) | Popup::Working(_) => {
                 return;
             }
+            Popup::ConfigHelp => {
+                match code {
+                    KeyCode::Char('c' | 'C') => {
+                        let config_dir = config::AppConfig::config_dir();
+                        let config_file = config_dir.join("quads-tui.toml");
+                        open_in_file_manager(&config_file);
+                        app.popup = None;
+                    }
+                    KeyCode::Char('l' | 'L') => {
+                        let config_dir = config::AppConfig::config_dir();
+                        let log_file = config_dir.join("quads-tui.log");
+                        open_in_file_manager(&log_file);
+                        app.popup = None;
+                    }
+                    KeyCode::Char('d' | 'D') => {
+                        let config_dir = config::AppConfig::config_dir();
+                        open_in_file_manager(&config_dir);
+                        app.popup = None;
+                    }
+                    KeyCode::Esc | KeyCode::Char('q' | 'Q') => {
+                        app.popup = None;
+                    }
+                    _ => {}
+                }
+                return;
+            }
             _ => {
                 if code == KeyCode::Esc {
                     app.popup = None;
@@ -346,13 +427,14 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     }
 
     if matches!(code, KeyCode::Char('U' | 'u'))
-        && let Some(ref info) = app.update_available {
-            let url = info.download_url.clone();
-            let ver = info.latest_version.clone();
-            app.popup = Some(Popup::Working(format!("Updating to v{}...", ver)));
-            app.pending_action = Some(update::spawn_self_update(url, ver));
-            return;
-        }
+        && let Some(ref info) = app.update_available
+    {
+        let url = info.download_url.clone();
+        let ver = info.latest_version.clone();
+        app.popup = Some(Popup::Working(format!("Updating to v{}...", ver)));
+        app.pending_action = Some(update::spawn_self_update(url, ver));
+        return;
+    }
 
     match app.screen {
         Screen::Dashboard => handle_dashboard_key(app, code),
@@ -374,14 +456,14 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('x' | 'X') => {
             app.auto_refresh = !app.auto_refresh;
         }
-        KeyCode::Up | KeyCode::Char('k')
-            if app.server_selected > 0 => {
-                app.server_selected -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.server_selected > 0 => {
+            app.server_selected -= 1;
+        }
         KeyCode::Down | KeyCode::Char('j')
-            if server_count > 0 && app.server_selected < server_count - 1 => {
-                app.server_selected += 1;
-            }
+            if server_count > 0 && app.server_selected < server_count - 1 =>
+        {
+            app.server_selected += 1;
+        }
         KeyCode::Enter => {
             let server_names: Vec<String> = app.config.servers.keys().cloned().collect();
             if let Some(name) = server_names.get(app.server_selected) {
@@ -435,6 +517,9 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
                 app.popup = Some(Popup::ServerForm(form));
             }
         }
+        KeyCode::Char('?') => {
+            app.popup = Some(Popup::ConfigHelp);
+        }
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
@@ -462,22 +547,18 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
                 app.host_selected = 0;
             }
             KeyCode::Char(c) => {
-                app.host_search
-                    .get_or_insert_with(String::new)
-                    .push(c);
+                app.host_search.get_or_insert_with(String::new).push(c);
                 app.host_selected = 0;
             }
             KeyCode::Up | KeyCode::Down => {
                 let host_count = app.filtered_hosts().len();
                 match code {
-                    KeyCode::Up
-                        if app.host_selected > 0 => {
-                            app.host_selected -= 1;
-                        }
-                    KeyCode::Down
-                        if host_count > 0 && app.host_selected < host_count - 1 => {
-                            app.host_selected += 1;
-                        }
+                    KeyCode::Up if app.host_selected > 0 => {
+                        app.host_selected -= 1;
+                    }
+                    KeyCode::Down if host_count > 0 && app.host_selected < host_count - 1 => {
+                        app.host_selected += 1;
+                    }
                     _ => {}
                 }
             }
@@ -500,28 +581,26 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Char('q' | 'Q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k' | 'K')
-            if app.host_selected > 0 => {
-                app.host_selected -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k' | 'K') if app.host_selected > 0 => {
+            app.host_selected -= 1;
+        }
         KeyCode::Down | KeyCode::Char('j' | 'J')
-            if host_count > 0 && app.host_selected < host_count - 1 => {
-                app.host_selected += 1;
-            }
+            if host_count > 0 && app.host_selected < host_count - 1 =>
+        {
+            app.host_selected += 1;
+        }
         KeyCode::PageUp => {
             app.host_selected = app.host_selected.saturating_sub(20);
         }
-        KeyCode::PageDown
-            if host_count > 0 => {
-                app.host_selected = (app.host_selected + 20).min(host_count - 1);
-            }
+        KeyCode::PageDown if host_count > 0 => {
+            app.host_selected = (app.host_selected + 20).min(host_count - 1);
+        }
         KeyCode::Home => {
             app.host_selected = 0;
         }
-        KeyCode::End
-            if host_count > 0 => {
-                app.host_selected = host_count - 1;
-            }
+        KeyCode::End if host_count > 0 => {
+            app.host_selected = host_count - 1;
+        }
         KeyCode::Char('/') => {
             app.host_searching = true;
             app.host_search = None;
@@ -595,7 +674,6 @@ fn filtered_assignment_count(app: &App) -> usize {
     }
 }
 
-
 fn get_selected_assignment<'a>(
     app: &App,
     session: &'a crate::session::Session,
@@ -629,8 +707,6 @@ fn assignment_schedule_count(app: &App) -> usize {
     }
 }
 
-
-
 fn handle_assignments_key(app: &mut App, code: KeyCode) {
     if app.assignment_searching {
         match code {
@@ -660,14 +736,12 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             KeyCode::Up | KeyCode::Down => {
                 let count = filtered_assignment_count(app);
                 match code {
-                    KeyCode::Up
-                        if app.assignment_selected > 0 => {
-                            app.assignment_selected -= 1;
-                        }
-                    KeyCode::Down
-                        if count > 0 && app.assignment_selected < count - 1 => {
-                            app.assignment_selected += 1;
-                        }
+                    KeyCode::Up if app.assignment_selected > 0 => {
+                        app.assignment_selected -= 1;
+                    }
+                    KeyCode::Down if count > 0 && app.assignment_selected < count - 1 => {
+                        app.assignment_selected += 1;
+                    }
                     _ => {}
                 }
             }
@@ -684,14 +758,14 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             KeyCode::Esc => {
                 app.assignment_detail_selected = None;
             }
-            KeyCode::Up | KeyCode::Char('k')
-                if detail_idx > 0 => {
-                    app.assignment_detail_selected = Some(detail_idx - 1);
-                }
+            KeyCode::Up | KeyCode::Char('k') if detail_idx > 0 => {
+                app.assignment_detail_selected = Some(detail_idx - 1);
+            }
             KeyCode::Down | KeyCode::Char('j')
-                if schedule_count > 0 && detail_idx < schedule_count - 1 => {
-                    app.assignment_detail_selected = Some(detail_idx + 1);
-                }
+                if schedule_count > 0 && detail_idx < schedule_count - 1 =>
+            {
+                app.assignment_detail_selected = Some(detail_idx + 1);
+            }
             KeyCode::Enter => {
                 if let Some(session) = app.sessions.active_session() {
                     let assignment = get_selected_assignment(app, session);
@@ -718,13 +792,14 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                             .filter(|s| s.assignment_id == assignment.id)
                             .collect();
                         if let Some(sched) = scheds.get(detail_idx)
-                            && let Some(sid) = sched.id {
-                                let host = sched.host_name().to_string();
-                                app.popup = Some(Popup::ConfirmUnschedule {
-                                    schedule_id: sid,
-                                    host_name: host,
-                                });
-                            }
+                            && let Some(sid) = sched.id
+                        {
+                            let host = sched.host_name().to_string();
+                            app.popup = Some(Popup::ConfirmUnschedule {
+                                schedule_id: sid,
+                                host_name: host,
+                            });
+                        }
                     }
                 }
             }
@@ -749,16 +824,16 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Char('q' | 'Q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k' | 'K')
-            if app.assignment_selected > 0 => {
-                app.assignment_selected -= 1;
-                app.assignment_detail_selected = None;
-            }
+        KeyCode::Up | KeyCode::Char('k' | 'K') if app.assignment_selected > 0 => {
+            app.assignment_selected -= 1;
+            app.assignment_detail_selected = None;
+        }
         KeyCode::Down | KeyCode::Char('j' | 'J')
-            if assignment_count > 0 && app.assignment_selected < assignment_count - 1 => {
-                app.assignment_selected += 1;
-                app.assignment_detail_selected = None;
-            }
+            if assignment_count > 0 && app.assignment_selected < assignment_count - 1 =>
+        {
+            app.assignment_selected += 1;
+            app.assignment_detail_selected = None;
+        }
         KeyCode::Enter => {
             let count = assignment_schedule_count(app);
             if count > 0 {
@@ -768,17 +843,15 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
         KeyCode::PageUp => {
             app.assignment_selected = app.assignment_selected.saturating_sub(20);
         }
-        KeyCode::PageDown
-            if assignment_count > 0 => {
-                app.assignment_selected = (app.assignment_selected + 20).min(assignment_count - 1);
-            }
+        KeyCode::PageDown if assignment_count > 0 => {
+            app.assignment_selected = (app.assignment_selected + 20).min(assignment_count - 1);
+        }
         KeyCode::Home => {
             app.assignment_selected = 0;
         }
-        KeyCode::End
-            if assignment_count > 0 => {
-                app.assignment_selected = assignment_count - 1;
-            }
+        KeyCode::End if assignment_count > 0 => {
+            app.assignment_selected = assignment_count - 1;
+        }
         KeyCode::Tab => {
             app.assignment_show_all = !app.assignment_show_all;
             app.assignment_selected = 0;
@@ -798,9 +871,10 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                     &session.my_assignments
                 };
                 if let Some(a) = assignments.get(app.assignment_selected)
-                    && let Some(id) = a.id {
-                        app.popup = Some(Popup::ConfirmTerminate(id));
-                    }
+                    && let Some(id) = a.id
+                {
+                    app.popup = Some(Popup::ConfirmTerminate(id));
+                }
             }
         }
         KeyCode::Char('r') => spawn_refresh(app),
@@ -838,12 +912,12 @@ fn filtered_cloud_count(app: &App) -> usize {
             }
             if let Some(ref search) = app.cloud_search
                 && !app::fuzzy_match(&c.name, search)
-                    && !app::fuzzy_match(c.owner.as_deref().unwrap_or(""), search)
-                    && !app::fuzzy_match(c.ticket.as_deref().unwrap_or(""), search)
-                    && !app::fuzzy_match(c.description.as_deref().unwrap_or(""), search)
-                {
-                    return false;
-                }
+                && !app::fuzzy_match(c.owner.as_deref().unwrap_or(""), search)
+                && !app::fuzzy_match(c.ticket.as_deref().unwrap_or(""), search)
+                && !app::fuzzy_match(c.description.as_deref().unwrap_or(""), search)
+            {
+                return false;
+            }
             true
         })
         .count()
@@ -870,22 +944,18 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
                 app.cloud_selected = 0;
             }
             KeyCode::Char(c) => {
-                app.cloud_search
-                    .get_or_insert_with(String::new)
-                    .push(c);
+                app.cloud_search.get_or_insert_with(String::new).push(c);
                 app.cloud_selected = 0;
             }
             KeyCode::Up | KeyCode::Down => {
                 let cloud_count = filtered_cloud_count(app);
                 match code {
-                    KeyCode::Up
-                        if app.cloud_selected > 0 => {
-                            app.cloud_selected -= 1;
-                        }
-                    KeyCode::Down
-                        if cloud_count > 0 && app.cloud_selected < cloud_count - 1 => {
-                            app.cloud_selected += 1;
-                        }
+                    KeyCode::Up if app.cloud_selected > 0 => {
+                        app.cloud_selected -= 1;
+                    }
+                    KeyCode::Down if cloud_count > 0 && app.cloud_selected < cloud_count - 1 => {
+                        app.cloud_selected += 1;
+                    }
                     _ => {}
                 }
             }
@@ -906,28 +976,26 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k')
-            if app.cloud_selected > 0 => {
-                app.cloud_selected -= 1;
-            }
+        KeyCode::Up | KeyCode::Char('k') if app.cloud_selected > 0 => {
+            app.cloud_selected -= 1;
+        }
         KeyCode::Down | KeyCode::Char('j')
-            if cloud_count > 0 && app.cloud_selected < cloud_count - 1 => {
-                app.cloud_selected += 1;
-            }
+            if cloud_count > 0 && app.cloud_selected < cloud_count - 1 =>
+        {
+            app.cloud_selected += 1;
+        }
         KeyCode::PageUp => {
             app.cloud_selected = app.cloud_selected.saturating_sub(20);
         }
-        KeyCode::PageDown
-            if cloud_count > 0 => {
-                app.cloud_selected = (app.cloud_selected + 20).min(cloud_count - 1);
-            }
+        KeyCode::PageDown if cloud_count > 0 => {
+            app.cloud_selected = (app.cloud_selected + 20).min(cloud_count - 1);
+        }
         KeyCode::Home => {
             app.cloud_selected = 0;
         }
-        KeyCode::End
-            if cloud_count > 0 => {
-                app.cloud_selected = cloud_count - 1;
-            }
+        KeyCode::End if cloud_count > 0 => {
+            app.cloud_selected = cloud_count - 1;
+        }
         KeyCode::Tab => {
             app.cloud_show_all = !app.cloud_show_all;
             app.cloud_selected = 0;
@@ -965,15 +1033,19 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup
-                && popup.pane == app::FilterPane::Status && popup.cursor > 0 {
-                    popup.cursor -= 1;
-                }
+                && popup.pane == app::FilterPane::Status
+                && popup.cursor > 0
+            {
+                popup.cursor -= 1;
+            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup
-                && popup.pane == app::FilterPane::Status && popup.cursor < 3 {
-                    popup.cursor += 1;
-                }
+                && popup.pane == app::FilterPane::Status
+                && popup.cursor < 3
+            {
+                popup.cursor += 1;
+            }
         }
         KeyCode::Char(' ') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
@@ -1001,15 +1073,17 @@ fn handle_host_info_key(app: &mut App, code: KeyCode) {
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup
-                && state.cursor > 0 {
-                    state.cursor -= 1;
-                }
+                && state.cursor > 0
+            {
+                state.cursor -= 1;
+            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup
-                && state.cursor < 3 {
-                    state.cursor += 1;
-                }
+                && state.cursor < 3
+            {
+                state.cursor += 1;
+            }
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup {
@@ -1057,53 +1131,60 @@ fn handle_server_form_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers)
         }
         KeyCode::Left => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    if modifiers.contains(KeyModifiers::CONTROL) {
-                        input.move_word_left();
-                    } else {
-                        input.move_left();
-                    }
+                && let Some(input) = form.active_input_mut()
+            {
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    input.move_word_left();
+                } else {
+                    input.move_left();
                 }
+            }
         }
         KeyCode::Right => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    if modifiers.contains(KeyModifiers::CONTROL) {
-                        input.move_word_right();
-                    } else {
-                        input.move_right();
-                    }
+                && let Some(input) = form.active_input_mut()
+            {
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    input.move_word_right();
+                } else {
+                    input.move_right();
                 }
+            }
         }
         KeyCode::Home => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    input.move_home();
-                }
+                && let Some(input) = form.active_input_mut()
+            {
+                input.move_home();
+            }
         }
         KeyCode::End => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    input.move_end();
-                }
+                && let Some(input) = form.active_input_mut()
+            {
+                input.move_end();
+            }
         }
         KeyCode::Delete => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    input.delete();
-                }
+                && let Some(input) = form.active_input_mut()
+            {
+                input.delete();
+            }
         }
         KeyCode::Backspace => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    input.backspace();
-                }
+                && let Some(input) = form.active_input_mut()
+            {
+                input.backspace();
+            }
         }
         KeyCode::Char(c) => {
             if let Some(Popup::ServerForm(ref mut form)) = app.popup
-                && let Some(input) = form.active_input_mut() {
-                    input.insert(c);
-                }
+                && let Some(input) = form.active_input_mut()
+            {
+                input.insert(c);
+            }
         }
         KeyCode::Enter => {
             if let Some(Popup::ServerForm(form)) = app.popup.take() {
@@ -1113,9 +1194,10 @@ fn handle_server_form_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers)
                 }
 
                 if let Some(ref old_name) = form.editing_existing
-                    && *old_name != form.name.value {
-                        app.config.remove_server(old_name);
-                    }
+                    && *old_name != form.name.value
+                {
+                    app.config.remove_server(old_name);
+                }
 
                 let existing = app.config.servers.get(&form.name.value);
                 app.config.add_server(
@@ -1222,10 +1304,12 @@ fn handle_auth_form_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         }
         KeyCode::Enter => {
             if let Some(Popup::AuthForm(ref mut form)) = app.popup
-                && !form.username.is_empty() && form.password.is_empty() {
-                    form.active_field = AuthFormField::Password;
-                    return;
-                }
+                && !form.username.is_empty()
+                && form.password.is_empty()
+            {
+                form.active_field = AuthFormField::Password;
+                return;
+            }
             if let Some(Popup::AuthForm(form)) = app.popup.take() {
                 if form.username.is_empty() {
                     app.popup = Some(Popup::Error("Username is required".into()));
@@ -1464,11 +1548,7 @@ fn handle_connect_result(app: &mut App, cr: ConnectResult) {
         }
         Err(err) => {
             if err.is_credential_error {
-                let mut form = AuthForm::with_credentials(
-                    cr.server_name,
-                    cr.username,
-                    cr.password,
-                );
+                let mut form = AuthForm::with_credentials(cr.server_name, cr.username, cr.password);
                 form.error = Some(err.message);
                 form.register_prompt = true;
                 app.popup = Some(Popup::AuthForm(form));
@@ -1514,11 +1594,9 @@ fn open_assignment_picker(app: &mut App) {
         .my_assignments
         .iter()
         .filter(|a| a.is_self_schedule == Some(true) && a.active == Some(true))
-        .map(|a| {
-            AssignmentPickerItem::Existing {
-                cloud_name: a.cloud_name().unwrap_or("--").to_string(),
-                description: a.description.clone().unwrap_or_default(),
-            }
+        .map(|a| AssignmentPickerItem::Existing {
+            cloud_name: a.cloud_name().unwrap_or("--").to_string(),
+            description: a.description.clone().unwrap_or_default(),
         })
         .collect();
     items.push(AssignmentPickerItem::NewAssignment);
@@ -1542,34 +1620,34 @@ fn handle_assignment_picker_key(app: &mut App, code: KeyCode) {
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup
-                && state.cursor > 0 {
-                    state.cursor -= 1;
-                }
+                && state.cursor > 0
+            {
+                state.cursor -= 1;
+            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup
-                && item_count > 0 && state.cursor < item_count - 1 {
-                    state.cursor += 1;
-                }
+                && item_count > 0
+                && state.cursor < item_count - 1
+            {
+                state.cursor += 1;
+            }
         }
         KeyCode::Enter => {
             if let Some(Popup::AssignmentPicker(state)) = app.popup.take()
-                && let Some(item) = state.items.get(state.cursor) {
-                    match item {
-                        AssignmentPickerItem::Existing { cloud_name, .. } => {
-                            spawn_schedule_to_existing(
-                                app,
-                                cloud_name.clone(),
-                                state.selected_hosts,
-                            );
-                        }
-                        AssignmentPickerItem::NewAssignment => {
-                            app.popup = Some(Popup::NewAssignmentForm(
-                                NewAssignmentForm::new(state.selected_hosts),
-                            ));
-                        }
+                && let Some(item) = state.items.get(state.cursor)
+            {
+                match item {
+                    AssignmentPickerItem::Existing { cloud_name, .. } => {
+                        spawn_schedule_to_existing(app, cloud_name.clone(), state.selected_hosts);
+                    }
+                    AssignmentPickerItem::NewAssignment => {
+                        app.popup = Some(Popup::NewAssignmentForm(NewAssignmentForm::new(
+                            state.selected_hosts,
+                        )));
                     }
                 }
+            }
         }
         _ => {}
     }
@@ -1601,53 +1679,60 @@ fn handle_new_assignment_form_key(app: &mut App, code: KeyCode, modifiers: KeyMo
         }
         KeyCode::Left => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    if modifiers.contains(KeyModifiers::CONTROL) {
-                        form.description.move_word_left();
-                    } else {
-                        form.description.move_left();
-                    }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    form.description.move_word_left();
+                } else {
+                    form.description.move_left();
                 }
+            }
         }
         KeyCode::Right => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    if modifiers.contains(KeyModifiers::CONTROL) {
-                        form.description.move_word_right();
-                    } else {
-                        form.description.move_right();
-                    }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    form.description.move_word_right();
+                } else {
+                    form.description.move_right();
                 }
+            }
         }
         KeyCode::Home => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    form.description.move_home();
-                }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                form.description.move_home();
+            }
         }
         KeyCode::End => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    form.description.move_end();
-                }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                form.description.move_end();
+            }
         }
         KeyCode::Delete => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    form.description.delete();
-                }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                form.description.delete();
+            }
         }
         KeyCode::Backspace => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    form.description.backspace();
-                }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                form.description.backspace();
+            }
         }
         KeyCode::Char(c) => {
             if let Some(Popup::NewAssignmentForm(ref mut form)) = app.popup
-                && form.active_field == app::NewAssignmentField::Description {
-                    form.description.insert(c);
-                }
+                && form.active_field == app::NewAssignmentField::Description
+            {
+                form.description.insert(c);
+            }
         }
         KeyCode::Enter => {
             if let Some(Popup::NewAssignmentForm(form)) = app.popup.take() {
@@ -1798,7 +1883,9 @@ fn spawn_refresh(app: &mut App) {
         let server_name1 = server_name.clone();
         let h1 = tokio::spawn(async move {
             match c1.get_hosts(None).await {
-                Ok(data) => { let _ = tx1.send(RefreshUpdate::Hosts(server_name1, data)).await; }
+                Ok(data) => {
+                    let _ = tx1.send(RefreshUpdate::Hosts(server_name1, data)).await;
+                }
                 Err(e) => {
                     log::error!("refresh hosts failed: {}", e);
                     let _ = tx1.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1811,7 +1898,9 @@ fn spawn_refresh(app: &mut App) {
         let server_name2 = server_name.clone();
         let h2 = tokio::spawn(async move {
             match c2.get_clouds().await {
-                Ok(data) => { let _ = tx2.send(RefreshUpdate::Clouds(server_name2, data)).await; }
+                Ok(data) => {
+                    let _ = tx2.send(RefreshUpdate::Clouds(server_name2, data)).await;
+                }
                 Err(e) => {
                     log::error!("refresh clouds failed: {}", e);
                     let _ = tx2.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1824,7 +1913,11 @@ fn spawn_refresh(app: &mut App) {
         let server_name3 = server_name.clone();
         let h3 = tokio::spawn(async move {
             match c3.get_cloud_summary().await {
-                Ok(data) => { let _ = tx3.send(RefreshUpdate::CloudSummaries(server_name3, data)).await; }
+                Ok(data) => {
+                    let _ = tx3
+                        .send(RefreshUpdate::CloudSummaries(server_name3, data))
+                        .await;
+                }
                 Err(e) => {
                     log::error!("refresh cloud summaries failed: {}", e);
                     let _ = tx3.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1837,7 +1930,11 @@ fn spawn_refresh(app: &mut App) {
         let server_name4 = server_name.clone();
         let h4 = tokio::spawn(async move {
             match c4.get_active_assignments().await {
-                Ok(data) => { let _ = tx4.send(RefreshUpdate::Assignments(server_name4, data)).await; }
+                Ok(data) => {
+                    let _ = tx4
+                        .send(RefreshUpdate::Assignments(server_name4, data))
+                        .await;
+                }
                 Err(e) => {
                     log::error!("refresh assignments failed: {}", e);
                     let _ = tx4.send(RefreshUpdate::Error(e.to_string())).await;
@@ -1850,7 +1947,9 @@ fn spawn_refresh(app: &mut App) {
         let server_name5 = server_name.clone();
         let h5 = tokio::spawn(async move {
             match c5.get_current_schedules(None).await {
-                Ok(data) => { let _ = tx5.send(RefreshUpdate::Schedules(server_name5, data)).await; }
+                Ok(data) => {
+                    let _ = tx5.send(RefreshUpdate::Schedules(server_name5, data)).await;
+                }
                 Err(e) => {
                     log::error!("refresh schedules failed: {}", e);
                     let _ = tx5.send(RefreshUpdate::Error(e.to_string())).await;

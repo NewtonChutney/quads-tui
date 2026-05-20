@@ -2,14 +2,17 @@ use crate::app::{
     App, AuthForm, AuthFormField, HostFilterFlags, HostFilterPopup, Screen, ServerForm,
     ServerFormField,
 };
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
-use ratatui::Frame;
 
 pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
-    let mut spans = vec![Span::styled(" QUADS ", Style::default().fg(Color::Black).bg(Color::Cyan))];
+    let mut spans = vec![Span::styled(
+        " QUADS ",
+        Style::default().fg(Color::Black).bg(Color::Cyan),
+    )];
 
     if let Some(session) = app.sessions.active_session() {
         spans.push(Span::raw(" "));
@@ -36,7 +39,6 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         ));
     }
 
-
     // QUADS TUI version
     let mut right_spans = vec![Span::styled(
         format!("v{}", crate::update::VERSION),
@@ -50,7 +52,9 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, app: &App) {
         ));
         right_spans.push(Span::styled(
             " [U]pdate",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ));
     }
 
@@ -97,18 +101,16 @@ fn key_hint(key: &str, desc: &str) -> Vec<Span<'static>> {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            format!(" {}", desc),
-            Style::default().fg(Color::Gray),
-        ),
+        Span::styled(format!(" {}", desc), Style::default().fg(Color::Gray)),
     ]
 }
 
-
-
 pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
     let mut spans: Vec<Span> = vec![
-        Span::styled("[Q]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "[Q]",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         Span::styled("uit", Style::default().fg(Color::Red)),
     ];
 
@@ -184,6 +186,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
     }
 
     let mut right_spans: Vec<Span> = Vec::new();
+    right_spans.extend(key_hint("?", "config/logs"));
     right_spans.extend(key_hint("r", "refresh"));
     let ar_label = if app.auto_refresh {
         "auto-refresh [on]"
@@ -194,12 +197,11 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
     right_spans.push(Span::raw(" "));
     right_spans.push(Span::styled(
         "[j/k/⬆/⬇]",
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     ));
-    right_spans.push(Span::styled(
-        " navigate",
-        Style::default().fg(Color::Gray),
-    ));
+    right_spans.push(Span::styled(" navigate", Style::default().fg(Color::Gray)));
 
     let left_width: usize = spans.iter().map(|s| s.width()).sum();
     let right_width: usize = right_spans.iter().map(|s| s.width()).sum();
@@ -208,8 +210,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
     spans.push(Span::raw(" ".repeat(pad)));
     spans.extend(right_spans);
 
-    let bar = Paragraph::new(Line::from(spans))
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)));
+    let bar = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::Rgb(30, 30, 30)));
     f.render_widget(bar, area);
 }
 
@@ -256,10 +257,7 @@ pub fn render_tab_bar(f: &mut Frame, area: Rect, active: Screen) {
     }
 
     spans.push(Span::raw("  "));
-    spans.push(Span::styled(
-        "[⬅/➡]",
-        Style::default().fg(Color::DarkGray),
-    ));
+    spans.push(Span::styled("[⬅/➡]", Style::default().fg(Color::DarkGray)));
     spans.push(Span::raw("switch tab"));
 
     let bar = Paragraph::new(Line::from(spans));
@@ -364,7 +362,13 @@ pub fn render_server_form(f: &mut Frame, form: &ServerForm) {
     }
 
     let ssl_active = form.active_field == ServerFormField::VerifySsl;
-    render_checkbox(f, field_chunks[2], "Verify SSL", form.verify_ssl, ssl_active);
+    render_checkbox(
+        f,
+        field_chunks[2],
+        "Verify SSL",
+        form.verify_ssl,
+        ssl_active,
+    );
 
     let help = Paragraph::new(Line::from(vec![
         Span::styled(" Tab", Style::default().fg(Color::Yellow)),
@@ -391,7 +395,12 @@ pub fn render_auth_form(f: &mut Frame, form: &AuthForm) {
 
     let title = Line::from(vec![
         Span::raw(format!(" {} — ", form.server_name)),
-        Span::styled("Login", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Login",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" "),
     ]);
 
@@ -425,16 +434,20 @@ pub fn render_auth_form(f: &mut Frame, form: &AuthForm) {
 
     if let Some(ref err) = form.error {
         let err_style = Style::default().fg(Color::Red);
-        let lines: Vec<Line> = err.split('\n').enumerate().map(|(i, line)| {
-            if i == 0 {
-                Line::from(vec![
-                    Span::styled(" \u{2717} ", err_style.add_modifier(Modifier::BOLD)),
-                    Span::styled(line, err_style),
-                ])
-            } else {
-                Line::from(Span::styled(format!("   {}", line), err_style))
-            }
-        }).collect();
+        let lines: Vec<Line> = err
+            .split('\n')
+            .enumerate()
+            .map(|(i, line)| {
+                if i == 0 {
+                    Line::from(vec![
+                        Span::styled(" \u{2717} ", err_style.add_modifier(Modifier::BOLD)),
+                        Span::styled(line, err_style),
+                    ])
+                } else {
+                    Line::from(Span::styled(format!("   {}", line), err_style))
+                }
+            })
+            .collect();
         let error_msg = Paragraph::new(lines).wrap(Wrap { trim: true });
         f.render_widget(error_msg, field_chunks[0]);
     }
@@ -457,15 +470,27 @@ pub fn render_auth_form(f: &mut Frame, form: &AuthForm) {
         let line = if input.is_empty() && *field == AuthFormField::Username {
             if is_active {
                 Line::from(vec![
-                    Span::styled("u", Style::default().fg(Color::DarkGray).add_modifier(Modifier::REVERSED)),
+                    Span::styled(
+                        "u",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::REVERSED),
+                    ),
                     Span::styled("ser@example.com", Style::default().fg(Color::DarkGray)),
                 ])
             } else {
-                Line::from(Span::styled("user@example.com", Style::default().fg(Color::DarkGray)))
+                Line::from(Span::styled(
+                    "user@example.com",
+                    Style::default().fg(Color::DarkGray),
+                ))
             }
         } else if *is_password {
             let masked_before = "*".repeat(input.before_cursor().chars().count());
-            let cursor_char = if input.cursor < input.value.len() { "*" } else { " " };
+            let cursor_char = if input.cursor < input.value.len() {
+                "*"
+            } else {
+                " "
+            };
             let masked_after_count = input.after_cursor_char().chars().count();
             let masked_after = "*".repeat(masked_after_count);
             if is_active {
@@ -520,7 +545,12 @@ fn render_register_prompt(f: &mut Frame, form: &AuthForm) {
 
     let title = Line::from(vec![
         Span::raw(format!(" {} — ", form.server_name)),
-        Span::styled("Register", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Register",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" "),
     ]);
 
@@ -552,23 +582,32 @@ fn render_register_prompt(f: &mut Frame, form: &AuthForm) {
 
     if let Some(ref err) = form.error {
         let err_style = Style::default().fg(Color::Red);
-        let lines: Vec<Line> = err.split('\n').enumerate().map(|(i, line)| {
-            if i == 0 {
-                Line::from(vec![
-                    Span::styled(" \u{2717} ", err_style.add_modifier(Modifier::BOLD)),
-                    Span::styled(line, err_style),
-                ])
-            } else {
-                Line::from(Span::styled(format!("   {}", line), err_style))
-            }
-        }).collect();
+        let lines: Vec<Line> = err
+            .split('\n')
+            .enumerate()
+            .map(|(i, line)| {
+                if i == 0 {
+                    Line::from(vec![
+                        Span::styled(" \u{2717} ", err_style.add_modifier(Modifier::BOLD)),
+                        Span::styled(line, err_style),
+                    ])
+                } else {
+                    Line::from(Span::styled(format!("   {}", line), err_style))
+                }
+            })
+            .collect();
         let error_msg = Paragraph::new(lines).wrap(Wrap { trim: true });
         f.render_widget(error_msg, chunks[0]);
     }
 
     let prompt = Paragraph::new(Line::from(vec![
         Span::raw(" Register as "),
-        Span::styled(&form.username.value, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            &form.username.value,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("?"),
     ]));
     f.render_widget(prompt, chunks[1]);
@@ -600,10 +639,7 @@ pub fn render_confirm_popup(f: &mut Frame, message: &str) {
         .constraints([Constraint::Min(1), Constraint::Length(1)])
         .split(inner);
 
-    let msg = Paragraph::new(Line::from(vec![
-        Span::raw(" "),
-        Span::raw(message),
-    ]));
+    let msg = Paragraph::new(Line::from(vec![Span::raw(" "), Span::raw(message)]));
     f.render_widget(msg, chunks[0]);
 
     let help = Paragraph::new(Line::from(vec![
@@ -823,10 +859,7 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
                             .size_gb
                             .map(|s| format!("{}GB", s))
                             .unwrap_or_else(|| "--".into());
-                        let count = disk
-                            .count
-                            .map(|c| format!("x{}", c))
-                            .unwrap_or_default();
+                        let count = disk.count.map(|c| format!("x{}", c)).unwrap_or_default();
                         lines.push(Line::from(Span::styled(
                             format!("      {} {} {}", dtype, size, count),
                             Style::default().fg(Color::DarkGray),
@@ -927,7 +960,9 @@ pub fn render_host_filter_popup(f: &mut Frame, popup: &HostFilterPopup) {
         let checked = if popup.flags.get(i) { "x" } else { " " };
         let is_cursor = status_focused && popup.cursor == i;
         let style = if is_cursor {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else if status_focused {
             Style::default()
         } else {
@@ -943,17 +978,17 @@ pub fn render_host_filter_popup(f: &mut Frame, popup: &HostFilterPopup) {
 
     let ssm_focused = popup.pane == FilterPane::SelfSchedule;
     let ssm_style = if ssm_focused {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
     let ssm_check = if popup.ssm_only { "x" } else { " " };
-    let ssm_lines = vec![
-        Line::from(Span::styled(
-            format!("  [{}] SSM only", ssm_check),
-            ssm_style,
-        )),
-    ];
+    let ssm_lines = vec![Line::from(Span::styled(
+        format!("  [{}] SSM only", ssm_check),
+        ssm_style,
+    ))];
     let ssm_widget = Paragraph::new(ssm_lines);
     f.render_widget(ssm_widget, panes[1]);
 
@@ -971,10 +1006,7 @@ pub fn render_host_filter_popup(f: &mut Frame, popup: &HostFilterPopup) {
     f.render_widget(help, chunks[1]);
 }
 
-pub fn render_assignment_picker(
-    f: &mut Frame,
-    state: &crate::app::AssignmentPickerState,
-) {
+pub fn render_assignment_picker(f: &mut Frame, state: &crate::app::AssignmentPickerState) {
     let area = centered_rect(50, 50, f.area());
     f.render_widget(Clear, area);
 
@@ -1023,7 +1055,11 @@ pub fn render_assignment_picker(
                 } => Line::from(vec![
                     Span::styled(
                         format!("  {} ", cloud_name),
-                        style.fg(if is_selected { Color::Black } else { Color::Cyan }),
+                        style.fg(if is_selected {
+                            Color::Black
+                        } else {
+                            Color::Cyan
+                        }),
                     ),
                     Span::styled(
                         if description.is_empty() {
@@ -1036,7 +1072,11 @@ pub fn render_assignment_picker(
                 ]),
                 crate::app::AssignmentPickerItem::NewAssignment => Line::from(Span::styled(
                     "  [+ New Assignment]",
-                    style.fg(if is_selected { Color::Black } else { Color::Yellow }),
+                    style.fg(if is_selected {
+                        Color::Black
+                    } else {
+                        Color::Yellow
+                    }),
                 )),
             }
         })
@@ -1114,8 +1154,7 @@ pub fn render_new_assignment_form(f: &mut Frame, form: &crate::app::NewAssignmen
     } else {
         Line::raw(&form.description.value)
     };
-    let desc_input = Paragraph::new(desc_line)
-    .block(
+    let desc_input = Paragraph::new(desc_line).block(
         Block::default()
             .title(" Description ")
             .borders(Borders::ALL)
@@ -1123,8 +1162,20 @@ pub fn render_new_assignment_form(f: &mut Frame, form: &crate::app::NewAssignmen
     );
     f.render_widget(desc_input, chunks[1]);
 
-    render_checkbox(f, chunks[2], "QinQ", form.qinq, form.active_field == crate::app::NewAssignmentField::Qinq);
-    render_checkbox(f, chunks[3], "Wipe", form.wipe, form.active_field == crate::app::NewAssignmentField::Wipe);
+    render_checkbox(
+        f,
+        chunks[2],
+        "QinQ",
+        form.qinq,
+        form.active_field == crate::app::NewAssignmentField::Qinq,
+    );
+    render_checkbox(
+        f,
+        chunks[3],
+        "Wipe",
+        form.wipe,
+        form.active_field == crate::app::NewAssignmentField::Wipe,
+    );
 
     let help = Paragraph::new(Line::from(vec![
         Span::styled(" Tab", Style::default().fg(Color::Yellow)),
@@ -1138,7 +1189,11 @@ pub fn render_new_assignment_form(f: &mut Frame, form: &crate::app::NewAssignmen
     f.render_widget(help, chunks[4]);
 }
 
-pub fn render_scheduling_popup(f: &mut Frame, progress: &crate::app::SchedulingProgress, spinner: char) {
+pub fn render_scheduling_popup(
+    f: &mut Frame,
+    progress: &crate::app::SchedulingProgress,
+    spinner: char,
+) {
     let area = centered_rect(40, 15, f.area());
     f.render_widget(Clear, area);
 
@@ -1159,15 +1214,69 @@ pub fn render_scheduling_popup(f: &mut Frame, progress: &crate::app::SchedulingP
 
 fn render_checkbox(f: &mut Frame, area: Rect, label: &str, checked: bool, active: bool) {
     let style = if active {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
     };
     let mark = if checked { "[x]" } else { "[ ]" };
-    let line = Paragraph::new(Line::from(vec![
-        Span::styled(format!(" {} {}", mark, label), style),
-    ]));
+    let line = Paragraph::new(Line::from(vec![Span::styled(
+        format!(" {} {}", mark, label),
+        style,
+    )]));
     f.render_widget(line, area);
+}
+
+pub fn render_config_help_popup(f: &mut Frame) {
+    let area = centered_rect(50, 30, f.area());
+    f.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(" Config & Logs ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let lines = vec![
+        Line::from(vec![
+            Span::styled(
+                "[C]",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Open config"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "[L]",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Open log"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "[D]",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Open config/log dir"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "[Esc] or [Q] to close",
+            Style::default().fg(Color::Gray),
+        )),
+    ];
+
+    let content = Paragraph::new(lines).style(Style::default().fg(Color::White));
+    f.render_widget(content, inner);
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

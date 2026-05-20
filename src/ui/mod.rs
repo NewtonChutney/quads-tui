@@ -5,8 +5,8 @@ pub mod hosts;
 pub mod widgets;
 
 use crate::app::{App, Popup, Screen};
-use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout};
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -67,16 +67,16 @@ pub fn render(f: &mut Frame, app: &App) {
                 widgets::render_scheduling_popup(f, progress, app.spinner_char());
             }
             Popup::ConfirmUnschedule { host_name, .. } => {
-                widgets::render_confirm_popup(
-                    f,
-                    &format!("Remove {} from assignment?", host_name),
-                );
+                widgets::render_confirm_popup(f, &format!("Remove {} from assignment?", host_name));
             }
             Popup::Working(msg) => {
                 widgets::render_working_popup(f, msg, app.spinner_char());
             }
             Popup::UpdateComplete(msg) => {
                 widgets::render_update_complete_popup(f, msg);
+            }
+            Popup::ConfigHelp => {
+                widgets::render_config_help_popup(f);
             }
         }
     }
