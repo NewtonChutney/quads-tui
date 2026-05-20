@@ -666,4 +666,31 @@ impl App {
             })
             .collect()
     }
+
+    pub fn filtered_sorted_assignments(&self) -> Vec<&Assignment> {
+        let Some(session) = self.sessions.active_session() else {
+            return Vec::new();
+        };
+        let all: &[Assignment] = if self.assignment_show_all {
+            &session.assignments
+        } else {
+            &session.my_assignments
+        };
+        let mut assignments: Vec<_> = all
+            .iter()
+            .filter(|a| {
+                if let Some(ref search) = self.assignment_search {
+                    assignment_matches_search(a, search)
+                } else {
+                    true
+                }
+            })
+            .collect();
+        assignments.sort_by(|a, b| {
+            a.cloud_name()
+                .unwrap_or("")
+                .cmp(b.cloud_name().unwrap_or(""))
+        });
+        assignments
+    }
 }

@@ -657,47 +657,20 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
 }
 
 fn filtered_assignment_count(app: &App) -> usize {
-    let Some(session) = app.sessions.active_session() else {
-        return 0;
-    };
-    let all: &[crate::api::models::Assignment] = if app.assignment_show_all {
-        &session.assignments
-    } else {
-        &session.my_assignments
-    };
-    if let Some(ref search) = app.assignment_search {
-        all.iter()
-            .filter(|a| app::assignment_matches_search(a, search))
-            .count()
-    } else {
-        all.len()
-    }
+    app.filtered_sorted_assignments().len()
 }
 
-fn get_selected_assignment<'a>(
-    app: &App,
-    session: &'a crate::session::Session,
-) -> Option<&'a crate::api::models::Assignment> {
-    let assignments: Vec<_> = if app.assignment_show_all {
-        session.assignments.iter().collect()
-    } else {
-        session.my_assignments.iter().collect()
-    };
-    if let Some(ref search) = app.assignment_search {
-        assignments
-            .into_iter()
-            .filter(|a| app::assignment_matches_search(a, search))
-            .nth(app.assignment_selected)
-    } else {
-        assignments.into_iter().nth(app.assignment_selected)
-    }
+fn get_selected_assignment(app: &App) -> Option<&crate::api::models::Assignment> {
+    app.filtered_sorted_assignments()
+        .get(app.assignment_selected)
+        .copied()
 }
 
 fn assignment_schedule_count(app: &App) -> usize {
     let Some(session) = app.sessions.active_session() else {
         return 0;
     };
-    match get_selected_assignment(app, session) {
+    match get_selected_assignment(app) {
         Some(assignment) => session
             .schedules
             .iter()
@@ -768,7 +741,7 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             }
             KeyCode::Enter => {
                 if let Some(session) = app.sessions.active_session() {
-                    let assignment = get_selected_assignment(app, session);
+                    let assignment = get_selected_assignment(app);
                     if let Some(assignment) = assignment {
                         let scheds: Vec<_> = session
                             .schedules
@@ -784,7 +757,7 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             }
             KeyCode::Char('u' | 'U') => {
                 if let Some(session) = app.sessions.active_session() {
-                    let assignment = get_selected_assignment(app, session);
+                    let assignment = get_selected_assignment(app);
                     if let Some(assignment) = assignment {
                         let scheds: Vec<_> = session
                             .schedules
