@@ -1,6 +1,6 @@
 [package]
 name = "quads-tui"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2024"
 repository = "https://github.com/NewtonChutney/quads-tui"
 license = "MIT"
@@ -22,6 +22,8 @@ pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-macos-aarch64"
 pkg-url = "{ repo }/releases/download/v{ version }/quads-tui-windows-x86_64.exe"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 ratatui = "0.29"
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }

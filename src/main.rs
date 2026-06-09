@@ -13,6 +13,8 @@ use app::{
     RefreshUpdate, ScheduleResult, SchedulingProgress, Screen, ServerForm, ServerFormField,
     TextInput,
 };
+use clap::{CommandFactory, Parser, ValueEnum};
+use clap_complete::Shell;
 use config::{AppConfig, ServerEntry};
 use crossterm::ExecutableCommand;
 use crossterm::event::{
@@ -33,6 +35,50 @@ use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
 
 const AUTO_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+
+#[derive(Clone, ValueEnum)]
+enum CliUpdateFrequency {
+    OnLaunch,
+    Daily,
+    Weekly,
+    Monthly,
+    Never,
+}
+
+impl From<CliUpdateFrequency> for config::UpdateFrequency {
+    fn from(f: CliUpdateFrequency) -> Self {
+        match f {
+            CliUpdateFrequency::OnLaunch => Self::OnLaunch,
+            CliUpdateFrequency::Daily => Self::Daily,
+            CliUpdateFrequency::Weekly => Self::Weekly,
+            CliUpdateFrequency::Monthly => Self::Monthly,
+            CliUpdateFrequency::Never => Self::Never,
+        }
+    }
+}
+
+#[derive(Parser)]
+#[command(
+    name = "quads-tui",
+    version = update::VERSION,
+    about = "Terminal UI for QUADS bare-metal scheduling",
+    after_help = format!(
+        "ENVIRONMENT:\n  RUST_LOG  Set log level (default: info, e.g. RUST_LOG=debug)\n\n\
+         CONFIG:\n  {}\n\n\
+         LOGS:\n  {}",
+        AppConfig::config_path().map(|p| p.display().to_string()).unwrap_or_default(),
+        AppConfig::config_dir().join("quads-tui.log").display()
+    )
+)]
+struct Cli {
+    /// Set update check frequency (persists to config)
+    #[arg(long = "update-check", value_enum)]
+    update_check: Option<CliUpdateFrequency>,
+
+    /// Print shell completions to stdout
+    #[arg(long, value_enum)]
+    completions: Option<Shell>,
+}
 
 fn get_log_path_display() -> String {
     let log_path = config::AppConfig::config_dir().join("quads-tui.log");
@@ -67,44 +113,11 @@ fn open_in_file_manager(path: &std::path::Path) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("quads-tui {}", update::VERSION);
-        return Ok(());
-    }
-    if args.iter().any(|a| a == "--help" || a == "-h") {
-        println!(
-            "quads-tui {} — Terminal UI for QUADS bare-metal scheduling",
-            update::VERSION
-        );
-        println!();
-        println!("USAGE:");
-        println!("    quads-tui [OPTIONS]");
-        println!();
-        println!("OPTIONS:");
-        println!("    -h, --help                  Print this help message");
-        println!("    -V, --version               Print version");
-        println!("    --update-check=FREQUENCY    Set update check frequency");
-        println!("                                (on_launch, daily, weekly, monthly, never)");
-        println!();
-        println!("ENVIRONMENT:");
-        println!("    RUST_LOG         Set log level (default: info, e.g. RUST_LOG=debug)");
-        println!();
-        println!("CONFIG:");
-        #[cfg(target_os = "macos")]
-        println!("    ~/Library/Application Support/quads/quads-tui.toml");
-        #[cfg(target_os = "linux")]
-        println!("    ~/.config/quads/quads-tui.toml");
-        #[cfg(target_os = "windows")]
-        println!("    %APPDATA%\\quads\\quads-tui.toml");
-        println!();
-        println!("LOGS:");
-        #[cfg(target_os = "macos")]
-        println!("    ~/Library/Application Support/quads/quads-tui.log");
-        #[cfg(target_os = "linux")]
-        println!("    ~/.config/quads/quads-tui.log");
-        #[cfg(target_os = "windows")]
-        println!("    %APPDATA%\\quads\\quads-tui.log");
+    let cli = Cli::parse();
+
+    if let Some(shell) = cli.completions {
+        let mut cmd = Cli::command();
+        clap_complete::generate(shell, &mut cmd, "quads-tui", &mut std::io::stdout());
         return Ok(());
     }
 
@@ -125,27 +138,39 @@ async fn main() -> Result<()> {
     WriteLogger::init(log_level, simplelog::Config::default(), log_file)?;
     log::info!("quads-tui starting (log level: {})", log_level);
 
-    let mut config = AppConfig::load().unwrap_or_default();
-
-    for arg in &args {
-        if let Some(freq) = arg.strip_prefix("--update-check=") {
-            config.update_check = match freq {
-                "on_launch" => config::UpdateFrequency::OnLaunch,
-                "daily" => config::UpdateFrequency::Daily,
-                "weekly" => config::UpdateFrequency::Weekly,
-                "monthly" => config::UpdateFrequency::Monthly,
-                "never" => config::UpdateFrequency::Never,
-                _ => {
-                    eprintln!("Invalid --update-check value: {}", freq);
-                    eprintln!("Valid options: on_launch, daily, weekly, monthly, never");
-                    std::process::exit(1);
-                }
-            };
-            let _ = config.save();
-            println!("Update check set to: {}", freq);
-            return Ok(());
-        }
+    if let Some(freq) = cli.update_check {
+        let freq_str = match &freq {
+            CliUpdateFrequency::OnLaunch => "on-launch",
+            CliUpdateFrequency::Daily => "daily",
+            CliUpdateFrequency::Weekly => "weekly",
+            CliUpdateFrequency::Monthly => "monthly",
+            CliUpdateFrequency::Never => "never",
+        };
+        let path = AppConfig::config_path()?;
+        let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
+            existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
+        } else {
+            toml_edit::DocumentMut::default()
+        };
+        doc["update_check"] = toml_edit::value(freq_str);
+        std::fs::write(&path, doc.to_string())?;
+        println!("Update check set to: {}", freq_str);
+        return Ok(());
     }
+
+    let config = match AppConfig::load() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "Failed to load config from {}: {}",
+                AppConfig::config_path()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
+                e
+            );
+            std::process::exit(1);
+        }
+    };
 
     let mut app = App::new(config);
     if app.config.should_check_update() {

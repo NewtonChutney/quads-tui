@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum UpdateFrequency {
     OnLaunch,
     Daily,
@@ -95,7 +95,7 @@ impl AppConfig {
 
         if self.update_check != UpdateFrequency::default() {
             let freq_str = match self.update_check {
-                UpdateFrequency::OnLaunch => "on_launch",
+                UpdateFrequency::OnLaunch => "on-launch",
                 UpdateFrequency::Daily => "daily",
                 UpdateFrequency::Weekly => "weekly",
                 UpdateFrequency::Monthly => "monthly",
