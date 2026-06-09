@@ -650,6 +650,9 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
         KeyCode::Char('a' | 'A') => app.navigate(Screen::Assignments),
         KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
+        KeyCode::Char('?') => {
+            app.popup = Some(Popup::ConfigHelp);
+        }
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
@@ -780,6 +783,9 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
             KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
             KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
+            KeyCode::Char('?') => {
+                app.popup = Some(Popup::ConfigHelp);
+            }
             KeyCode::Right => app.navigate(app.screen.next()),
             KeyCode::Left => app.navigate(app.screen.prev()),
             _ => {}
@@ -857,6 +863,9 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
         KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
         KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
+        KeyCode::Char('?') => {
+            app.popup = Some(Popup::ConfigHelp);
+        }
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
@@ -985,6 +994,9 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
         KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
         KeyCode::Char('a' | 'A') => app.navigate(Screen::Assignments),
+        KeyCode::Char('?') => {
+            app.popup = Some(Popup::ConfigHelp);
+        }
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
