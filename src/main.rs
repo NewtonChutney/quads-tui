@@ -1065,14 +1065,23 @@ fn handle_host_info_key(app: &mut App, code: KeyCode) {
         }
         KeyCode::Down | KeyCode::Char('j' | 'J') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup
-                && state.cursor < 3
+                && state.cursor < state.sections.len() - 1
             {
                 state.cursor += 1;
             }
         }
-        KeyCode::Enter | KeyCode::Char(' ') => {
+        KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Right => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup {
                 state.sections[state.cursor] = !state.sections[state.cursor];
+            }
+        }
+        KeyCode::Char('a' | 'A') => {
+            if let Some(Popup::HostInfo(ref mut state)) = app.popup {
+                let all_expanded = state.sections.iter().all(|&s| s);
+                let new_val = !all_expanded;
+                for s in &mut state.sections {
+                    *s = new_val;
+                }
             }
         }
         KeyCode::PageUp => {
