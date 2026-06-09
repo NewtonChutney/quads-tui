@@ -456,10 +456,10 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('x' | 'X') => {
             app.auto_refresh = !app.auto_refresh;
         }
-        KeyCode::Up | KeyCode::Char('k') if app.server_selected > 0 => {
+        KeyCode::Up | KeyCode::Char('k' | 'K') if app.server_selected > 0 => {
             app.server_selected -= 1;
         }
-        KeyCode::Down | KeyCode::Char('j')
+        KeyCode::Down | KeyCode::Char('j' | 'J')
             if server_count > 0 && app.server_selected < server_count - 1 =>
         {
             app.server_selected += 1;
@@ -502,10 +502,10 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
                 }
             }
         }
-        KeyCode::Char('n') => {
+        KeyCode::Char('n' | 'N') => {
             app.popup = Some(Popup::ServerForm(ServerForm::new()));
         }
-        KeyCode::Char('e') => {
+        KeyCode::Char('e' | 'E') => {
             let server_names: Vec<String> = app.config.servers.keys().cloned().collect();
             if let Some(name) = server_names.get(app.server_selected) {
                 let entry = &app.config.servers[name];
@@ -731,10 +731,10 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             KeyCode::Esc => {
                 app.assignment_detail_selected = None;
             }
-            KeyCode::Up | KeyCode::Char('k') if detail_idx > 0 => {
+            KeyCode::Up | KeyCode::Char('k' | 'K') if detail_idx > 0 => {
                 app.assignment_detail_selected = Some(detail_idx - 1);
             }
-            KeyCode::Down | KeyCode::Char('j')
+            KeyCode::Down | KeyCode::Char('j' | 'J')
                 if schedule_count > 0 && detail_idx < schedule_count - 1 =>
             {
                 app.assignment_detail_selected = Some(detail_idx + 1);
@@ -850,13 +850,13 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                 }
             }
         }
-        KeyCode::Char('r') => spawn_refresh(app),
-        KeyCode::Char('x') => {
+        KeyCode::Char('r' | 'R') => spawn_refresh(app),
+        KeyCode::Char('x' | 'X') => {
             app.auto_refresh = !app.auto_refresh;
         }
-        KeyCode::Char('d') => app.navigate(Screen::Dashboard),
-        KeyCode::Char('h') => app.navigate(Screen::Hosts),
-        KeyCode::Char('c') => app.navigate(Screen::Clouds),
+        KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
+        KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
+        KeyCode::Char('c' | 'C') => app.navigate(Screen::Clouds),
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
@@ -948,11 +948,11 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
                 app.go_back();
             }
         }
-        KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') if app.cloud_selected > 0 => {
+        KeyCode::Char('q' | 'Q') => app.running = false,
+        KeyCode::Up | KeyCode::Char('k' | 'K') if app.cloud_selected > 0 => {
             app.cloud_selected -= 1;
         }
-        KeyCode::Down | KeyCode::Char('j')
+        KeyCode::Down | KeyCode::Char('j' | 'J')
             if cloud_count > 0 && app.cloud_selected < cloud_count - 1 =>
         {
             app.cloud_selected += 1;
@@ -978,13 +978,13 @@ fn handle_clouds_key(app: &mut App, code: KeyCode) {
             app.cloud_search = None;
             app.cloud_selected = 0;
         }
-        KeyCode::Char('r') => spawn_refresh(app),
-        KeyCode::Char('x') => {
+        KeyCode::Char('r' | 'R') => spawn_refresh(app),
+        KeyCode::Char('x' | 'X') => {
             app.auto_refresh = !app.auto_refresh;
         }
-        KeyCode::Char('d') => app.navigate(Screen::Dashboard),
-        KeyCode::Char('h') => app.navigate(Screen::Hosts),
-        KeyCode::Char('a') => app.navigate(Screen::Assignments),
+        KeyCode::Char('d' | 'D') => app.navigate(Screen::Dashboard),
+        KeyCode::Char('h' | 'H') => app.navigate(Screen::Hosts),
+        KeyCode::Char('a' | 'A') => app.navigate(Screen::Assignments),
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
@@ -1004,7 +1004,7 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
                 };
             }
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up | KeyCode::Char('k' | 'K') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup
                 && popup.pane == app::FilterPane::Status
                 && popup.cursor > 0
@@ -1012,7 +1012,7 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
                 popup.cursor -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down | KeyCode::Char('j' | 'J') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup
                 && popup.pane == app::FilterPane::Status
                 && popup.cursor < 3
@@ -1044,14 +1044,14 @@ fn handle_host_info_key(app: &mut App, code: KeyCode) {
         KeyCode::Esc => {
             app.popup = None;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up | KeyCode::Char('k' | 'K') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup
                 && state.cursor > 0
             {
                 state.cursor -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down | KeyCode::Char('j' | 'J') => {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup
                 && state.cursor < 3
             {
@@ -1591,14 +1591,14 @@ fn handle_assignment_picker_key(app: &mut App, code: KeyCode) {
         KeyCode::Esc => {
             app.popup = None;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up | KeyCode::Char('k' | 'K') => {
             if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup
                 && state.cursor > 0
             {
                 state.cursor -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Down | KeyCode::Char('j' | 'J') => {
             if let Some(Popup::AssignmentPicker(ref mut state)) = app.popup
                 && item_count > 0
                 && state.cursor < item_count - 1
