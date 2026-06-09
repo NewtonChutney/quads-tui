@@ -380,7 +380,7 @@ pub struct HostInfoState {
     pub host_idx: usize,
     pub host_name: Option<String>,
     pub scroll: u16,
-    pub sections: [bool; 4],
+    pub sections: [bool; 5],
     pub cursor: usize,
 }
 
@@ -390,7 +390,7 @@ impl HostInfoState {
             host_idx,
             host_name: None,
             scroll: 0,
-            sections: [false; 4],
+            sections: [false; 5],
             cursor: 0,
         }
     }
@@ -400,7 +400,7 @@ impl HostInfoState {
             host_idx: 0,
             host_name: Some(name),
             scroll: 0,
-            sections: [false; 4],
+            sections: [false; 5],
             cursor: 0,
         }
     }

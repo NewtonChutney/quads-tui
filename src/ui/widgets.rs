@@ -795,12 +795,16 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
 
     lines.push(Line::raw(""));
 
-    let section_names = ["Interfaces", "Disks", "Memory", "Processors"];
+    let cpus: Vec<_> = host.processors.iter().filter(|p| !p.is_gpu()).collect();
+    let gpus: Vec<_> = host.processors.iter().filter(|p| p.is_gpu()).collect();
+
+    let section_names = ["Interfaces", "Disks", "Memory", "Processors", "GPUs"];
     let section_counts = [
         host.interfaces.len(),
         host.disks.len(),
         host.memory.len(),
-        host.processors.len(),
+        cpus.len(),
+        gpus.len(),
     ];
 
     for (si, (name, count)) in section_names.iter().zip(section_counts.iter()).enumerate() {
@@ -883,7 +887,7 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
                     }
                 }
                 3 => {
-                    for proc in &host.processors {
+                    for proc in &cpus {
                         let vendor = proc.vendor.as_deref().unwrap_or("--");
                         let product = proc.product.as_deref().unwrap_or("--");
                         let cores = proc
@@ -900,6 +904,16 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
                         )));
                     }
                 }
+                4 => {
+                    for gpu in &gpus {
+                        let vendor = gpu.vendor.as_deref().unwrap_or("--");
+                        let product = gpu.product.as_deref().unwrap_or("--");
+                        lines.push(Line::from(Span::styled(
+                            format!("      {} {}", vendor, product),
+                            Style::default().fg(Color::DarkGray),
+                        )));
+                    }
+                }
                 _ => {}
             }
         }
@@ -912,6 +926,8 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
         Span::styled("] navigate  [", Style::default().fg(Color::DarkGray)),
         Span::styled("Enter", Style::default().fg(Color::Yellow)),
         Span::styled("] expand/collapse  [", Style::default().fg(Color::DarkGray)),
+        Span::styled("a", Style::default().fg(Color::Yellow)),
+        Span::styled("] expand/collapse all  [", Style::default().fg(Color::DarkGray)),
         Span::styled("Esc", Style::default().fg(Color::Yellow)),
         Span::styled("] close", Style::default().fg(Color::DarkGray)),
     ]));

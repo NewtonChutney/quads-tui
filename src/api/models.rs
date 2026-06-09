@@ -68,6 +68,14 @@ pub struct Processor {
     pub cores: Option<i64>,
     #[serde(default)]
     pub threads: Option<i64>,
+    #[serde(default)]
+    pub processor_type: Option<String>,
+}
+
+impl Processor {
+    pub fn is_gpu(&self) -> bool {
+        self.processor_type.as_deref() == Some("GPU")
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
