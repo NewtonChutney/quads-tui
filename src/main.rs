@@ -623,6 +623,8 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
                 flags: app.host_filters.clone(),
                 pane: app::FilterPane::Status,
                 ssm_only: app.host_ssm_filter,
+                gpu_only: app.host_gpu_filter,
+                right_cursor: 0,
             }));
         }
         KeyCode::Enter => {
@@ -1012,26 +1014,32 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if let Some(Popup::HostFilter(ref mut popup)) = app.popup
-                && popup.pane == app::FilterPane::Status
-                && popup.cursor > 0
-            {
-                popup.cursor -= 1;
+            if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
+                match popup.pane {
+                    app::FilterPane::Status if popup.cursor > 0 => popup.cursor -= 1,
+                    app::FilterPane::SelfSchedule if popup.right_cursor > 0 => popup.right_cursor -= 1,
+                    _ => {}
+                }
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if let Some(Popup::HostFilter(ref mut popup)) = app.popup
-                && popup.pane == app::FilterPane::Status
-                && popup.cursor < 3
-            {
-                popup.cursor += 1;
+            if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
+                match popup.pane {
+                    app::FilterPane::Status if popup.cursor < 3 => popup.cursor += 1,
+                    app::FilterPane::SelfSchedule if popup.right_cursor < 1 => popup.right_cursor += 1,
+                    _ => {}
+                }
             }
         }
         KeyCode::Char(' ') => {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
                 match popup.pane {
                     app::FilterPane::Status => popup.flags.toggle(popup.cursor),
-                    app::FilterPane::SelfSchedule => popup.ssm_only = !popup.ssm_only,
+                    app::FilterPane::SelfSchedule => match popup.right_cursor {
+                        0 => popup.ssm_only = !popup.ssm_only,
+                        1 => popup.gpu_only = !popup.gpu_only,
+                        _ => {}
+                    },
                 }
             }
         }
@@ -1039,6 +1047,7 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
             if let Some(Popup::HostFilter(popup)) = app.popup.take() {
                 app.host_filters = popup.flags;
                 app.host_ssm_filter = popup.ssm_only;
+                app.host_gpu_filter = popup.gpu_only;
                 app.host_selected = 0;
             }
         }

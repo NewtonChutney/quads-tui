@@ -256,6 +256,8 @@ pub struct HostFilterPopup {
     pub flags: HostFilterFlags,
     pub pane: FilterPane,
     pub ssm_only: bool,
+    pub gpu_only: bool,
+    pub right_cursor: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -516,6 +518,7 @@ pub struct App {
 
     pub host_filters: HostFilterFlags,
     pub host_ssm_filter: bool,
+    pub host_gpu_filter: bool,
     pub host_self_schedule_only: bool,
     pub host_selected: usize,
     pub host_search: Option<String>,
@@ -561,6 +564,7 @@ impl App {
 
             host_filters: HostFilterFlags::default_filters(),
             host_ssm_filter: false,
+            host_gpu_filter: false,
             host_self_schedule_only: false,
             host_selected: 0,
             host_search: None,
@@ -646,6 +650,10 @@ impl App {
                 }
 
                 if self.host_ssm_filter && h.can_self_schedule != Some(true) {
+                    return false;
+                }
+
+                if self.host_gpu_filter && !h.processors.iter().any(|p| p.is_gpu()) {
                     return false;
                 }
 

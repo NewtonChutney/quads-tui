@@ -952,7 +952,7 @@ pub fn render_host_filter_popup(f: &mut Frame, popup: &HostFilterPopup) {
 
     let title = match popup.pane {
         FilterPane::Status => " Filter on Status ",
-        FilterPane::SelfSchedule => " Filter on Self-Schedule ",
+        FilterPane::SelfSchedule => " Filter on Properties ",
     };
 
     let block = Block::default()
@@ -995,21 +995,31 @@ pub fn render_host_filter_popup(f: &mut Frame, popup: &HostFilterPopup) {
     let status_widget = Paragraph::new(status_lines);
     f.render_widget(status_widget, panes[0]);
 
-    let ssm_focused = popup.pane == FilterPane::SelfSchedule;
-    let ssm_style = if ssm_focused {
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let ssm_check = if popup.ssm_only { "x" } else { " " };
-    let ssm_lines = vec![Line::from(Span::styled(
-        format!("  [{}] SSM only", ssm_check),
-        ssm_style,
-    ))];
-    let ssm_widget = Paragraph::new(ssm_lines);
-    f.render_widget(ssm_widget, panes[1]);
+    let right_focused = popup.pane == FilterPane::SelfSchedule;
+    let right_items: [(&str, bool); 2] = [
+        ("SSM only", popup.ssm_only),
+        ("GPU only", popup.gpu_only),
+    ];
+    let mut right_lines = vec![];
+    for (i, (label, checked)) in right_items.iter().enumerate() {
+        let check = if *checked { "x" } else { " " };
+        let is_cursor = right_focused && popup.right_cursor == i;
+        let style = if is_cursor {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else if right_focused {
+            Style::default()
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        right_lines.push(Line::from(Span::styled(
+            format!("  [{}] {}", check, label),
+            style,
+        )));
+    }
+    let right_widget = Paragraph::new(right_lines);
+    f.render_widget(right_widget, panes[1]);
 
     let help = Paragraph::new(Line::from(vec![
         Span::styled(" [", Style::default().fg(Color::DarkGray)),
