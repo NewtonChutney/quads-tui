@@ -795,16 +795,16 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
 
     lines.push(Line::raw(""));
 
-    let cpus: Vec<_> = host.processors.iter().filter(|p| !p.is_gpu()).collect();
-    let gpus: Vec<_> = host.processors.iter().filter(|p| p.is_gpu()).collect();
+    let gpu_count = host.processors.iter().filter(|p| p.is_gpu()).count();
+    let cpu_count = host.processors.len() - gpu_count;
 
     let section_names = ["Interfaces", "Disks", "Memory", "Processors", "GPUs"];
     let section_counts = [
         host.interfaces.len(),
         host.disks.len(),
         host.memory.len(),
-        cpus.len(),
-        gpus.len(),
+        cpu_count,
+        gpu_count,
     ];
 
     for (si, (name, count)) in section_names.iter().zip(section_counts.iter()).enumerate() {
@@ -887,7 +887,7 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
                     }
                 }
                 3 => {
-                    for proc in &cpus {
+                    for proc in host.processors.iter().filter(|p| !p.is_gpu()) {
                         let vendor = proc.vendor.as_deref().unwrap_or("--");
                         let product = proc.product.as_deref().unwrap_or("--");
                         let cores = proc
@@ -905,7 +905,7 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
                     }
                 }
                 4 => {
-                    for gpu in &gpus {
+                    for gpu in host.processors.iter().filter(|p| p.is_gpu()) {
                         let vendor = gpu.vendor.as_deref().unwrap_or("--");
                         let product = gpu.product.as_deref().unwrap_or("--");
                         lines.push(Line::from(Span::styled(
