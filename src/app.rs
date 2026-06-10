@@ -1,6 +1,7 @@
 use crate::api::models::*;
 use crate::config::AppConfig;
 use crate::session::{Session, SessionManager};
+use crossterm::event::KeyCode;
 use std::collections::HashSet;
 use tokio::sync::oneshot;
 
@@ -508,6 +509,58 @@ pub enum Popup {
     ConfigHelp,
 }
 
+#[derive(Debug, Default)]
+pub struct SearchState {
+    pub active: bool,
+    pub query: Option<String>,
+    pub selected: usize,
+}
+
+impl SearchState {
+    pub fn handle_key(&mut self, code: KeyCode, item_count: usize) -> bool {
+        if !self.active {
+            return false;
+        }
+        match code {
+            KeyCode::Esc => {
+                self.active = false;
+                self.query = None;
+                self.selected = 0;
+            }
+            KeyCode::Enter => {
+                self.active = false;
+            }
+            KeyCode::Backspace => {
+                if let Some(ref mut s) = self.query {
+                    s.pop();
+                    if s.is_empty() {
+                        self.query = None;
+                    }
+                }
+                self.selected = 0;
+            }
+            KeyCode::Char(c) => {
+                self.query.get_or_insert_with(String::new).push(c);
+                self.selected = 0;
+            }
+            KeyCode::Up if self.selected > 0 => {
+                self.selected -= 1;
+            }
+            KeyCode::Down if item_count > 0 && self.selected < item_count - 1 => {
+                self.selected += 1;
+            }
+            _ => {}
+        }
+        true
+    }
+
+    pub fn start(&mut self) {
+        self.active = true;
+        self.query = None;
+        self.selected = 0;
+    }
+}
+
 impl Popup {
     pub fn accepts_text_input(&self) -> bool {
         matches!(
@@ -529,21 +582,15 @@ pub struct App {
     pub host_ssm_filter: bool,
     pub host_gpu_filter: bool,
     pub host_self_schedule_only: bool,
-    pub host_selected: usize,
-    pub host_search: Option<String>,
-    pub host_searching: bool,
+    pub host_search: SearchState,
     pub host_multi_select: HashSet<String>,
 
-    pub assignment_selected: usize,
     pub assignment_show_all: bool,
-    pub assignment_search: Option<String>,
-    pub assignment_searching: bool,
+    pub assignment_search: SearchState,
     pub assignment_detail_selected: Option<usize>,
 
-    pub cloud_selected: usize,
     pub cloud_show_all: bool,
-    pub cloud_search: Option<String>,
-    pub cloud_searching: bool,
+    pub cloud_search: SearchState,
 
     pub server_selected: usize,
 
@@ -575,21 +622,15 @@ impl App {
             host_ssm_filter: false,
             host_gpu_filter: false,
             host_self_schedule_only: false,
-            host_selected: 0,
-            host_search: None,
-            host_searching: false,
+            host_search: SearchState::default(),
             host_multi_select: HashSet::new(),
 
-            assignment_selected: 0,
             assignment_show_all: false,
-            assignment_search: None,
-            assignment_searching: false,
+            assignment_search: SearchState::default(),
             assignment_detail_selected: None,
 
-            cloud_selected: 0,
             cloud_show_all: true,
-            cloud_search: None,
-            cloud_searching: false,
+            cloud_search: SearchState::default(),
 
             server_selected: 0,
 
@@ -626,6 +667,13 @@ impl App {
         }
     }
 
+    pub fn is_text_input_active(&self) -> bool {
+        self.host_search.active
+            || self.assignment_search.active
+            || self.cloud_search.active
+            || self.popup.as_ref().is_some_and(|p| p.accepts_text_input())
+    }
+
     pub fn set_error(&mut self, msg: String) {
         self.popup = Some(Popup::Error(msg));
     }
@@ -644,7 +692,7 @@ impl App {
             .hosts
             .iter()
             .filter(|h| {
-                if let Some(ref search) = self.host_search
+                if let Some(ref search) = self.host_search.query
                     && !fuzzy_match(&h.name, search)
                 {
                     return false;
@@ -696,7 +744,7 @@ impl App {
         let mut assignments: Vec<_> = all
             .iter()
             .filter(|a| {
-                if let Some(ref search) = self.assignment_search {
+                if let Some(ref search) = self.assignment_search.query {
                     assignment_matches_search(a, search)
                 } else {
                     true

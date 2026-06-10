@@ -152,7 +152,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
                 }
                 spans.extend(key_hint("s", "schedule"));
             } else {
-                if app.host_search.is_some() {
+                if app.host_search.query.is_some() {
                     spans.extend(key_hint("Esc", "clear search"));
                 }
                 spans.extend(key_hint("f", "filter"));
@@ -161,7 +161,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
             spans.extend(key_hint("/", "search"));
         }
         Screen::Assignments => {
-            if app.assignment_search.is_some() {
+            if app.assignment_search.query.is_some() {
                 spans.extend(key_hint("Esc", "clear search"));
             }
             if app.assignment_detail_selected.is_some() {
@@ -176,7 +176,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
             }
         }
         Screen::Clouds => {
-            if app.cloud_search.is_some() {
+            if app.cloud_search.query.is_some() {
                 spans.extend(key_hint("Esc", "clear search"));
             }
             spans.extend(key_hint("Enter", "detail"));

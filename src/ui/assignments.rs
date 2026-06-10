@@ -44,7 +44,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
 
     let filtered = app.filtered_sorted_assignments();
 
-    let (content_area, search_area) = if app.assignment_searching || app.assignment_search.is_some()
+    let (content_area, search_area) =
+        if app.assignment_search.active || app.assignment_search.query.is_some()
     {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -56,8 +57,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     };
 
     if let Some(sa) = search_area {
-        let query = app.assignment_search.as_deref().unwrap_or("");
-        let cursor = if app.assignment_searching {
+        let query = app.assignment_search.query.as_deref().unwrap_or("");
+        let cursor = if app.assignment_search.active {
             "\u{2588}"
         } else {
             ""
@@ -99,7 +100,7 @@ fn render_sidebar(f: &mut Frame, area: Rect, app: &App, assignments: &[&crate::a
             let cloud = a.cloud_name().unwrap_or("--");
             let id = a.id.map(|i| format!("#{}", i)).unwrap_or_default();
 
-            let style = if i == app.assignment_selected {
+            let style = if i == app.assignment_search.selected {
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Cyan)
@@ -141,12 +142,12 @@ fn render_sidebar(f: &mut Frame, area: Rect, app: &App, assignments: &[&crate::a
         .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default());
 
-    let mut state = ListState::default().with_selected(Some(app.assignment_selected));
+    let mut state = ListState::default().with_selected(Some(app.assignment_search.selected));
     f.render_stateful_widget(list, area, &mut state);
 }
 
 fn render_detail(f: &mut Frame, area: Rect, app: &App, assignments: &[&crate::api::Assignment]) {
-    let Some(assignment) = assignments.get(app.assignment_selected) else {
+    let Some(assignment) = assignments.get(app.assignment_search.selected) else {
         let empty = Paragraph::new("  Select an assignment")
             .block(Block::default().borders(Borders::ALL).title(" Detail "))
             .style(Style::default().fg(Color::DarkGray));

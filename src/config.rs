@@ -7,6 +7,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum UpdateFrequency {
+    #[serde(alias = "on_launch")]
     OnLaunch,
     Daily,
     #[default]
@@ -157,6 +158,9 @@ impl AppConfig {
 
     pub fn set_update_check(freq: &UpdateFrequency) -> Result<()> {
         let path = Self::config_path()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
             existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
         } else {

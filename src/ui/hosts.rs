@@ -14,7 +14,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let (table_area, search_area) = if app.host_searching || app.host_search.is_some() {
+    let (table_area, search_area) = if app.host_search.active || app.host_search.query.is_some() {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(3), Constraint::Length(1)])
@@ -25,8 +25,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     };
 
     if let Some(sa) = search_area {
-        let query = app.host_search.as_deref().unwrap_or("");
-        let cursor = if app.host_searching { "\u{2588}" } else { "" };
+        let query = app.host_search.query.as_deref().unwrap_or("");
+        let cursor = if app.host_search.active { "\u{2588}" } else { "" };
         let search_line = Line::from(vec![
             Span::styled(" /", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw(format!("{}{} ", query, cursor)),
@@ -53,7 +53,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
                 ("scheduled", Color::Yellow)
             };
 
-            let style = if i == app.host_selected {
+            let style = if i == app.host_search.selected {
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Cyan)
@@ -138,6 +138,6 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(Style::default());
 
-    let mut state = TableState::default().with_selected(Some(app.host_selected));
+    let mut state = TableState::default().with_selected(Some(app.host_search.selected));
     f.render_stateful_widget(table, table_area, &mut state);
 }

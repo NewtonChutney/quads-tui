@@ -312,15 +312,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn is_text_input_active(app: &App) -> bool {
-    app.host_searching
-        || app.assignment_searching
-        || app.cloud_searching
-        || app.popup.as_ref().is_some_and(|p| p.accepts_text_input())
-}
-
 async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    let code = if is_text_input_active(app) {
+    let code = if app.is_text_input_active() {
         code
     } else {
         match code {
@@ -329,7 +322,9 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         }
     };
 
-    if modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {
+    if modifiers.contains(KeyModifiers::CONTROL)
+        && matches!(code, KeyCode::Char('c') | KeyCode::Char('C'))
+    {
         app.running = false;
         return;
     }
@@ -535,88 +530,49 @@ fn handle_dashboard_key(app: &mut App, code: KeyCode) {
 }
 
 fn handle_hosts_key(app: &mut App, code: KeyCode) {
-    if app.host_searching {
-        match code {
-            KeyCode::Esc => {
-                app.host_searching = false;
-                app.host_search = None;
-                app.host_selected = 0;
-            }
-            KeyCode::Enter => {
-                app.host_searching = false;
-            }
-            KeyCode::Backspace => {
-                if let Some(ref mut s) = app.host_search {
-                    s.pop();
-                    if s.is_empty() {
-                        app.host_search = None;
-                    }
-                }
-                app.host_selected = 0;
-            }
-            KeyCode::Char(c) => {
-                app.host_search.get_or_insert_with(String::new).push(c);
-                app.host_selected = 0;
-            }
-            KeyCode::Up | KeyCode::Down => {
-                let host_count = app.filtered_hosts().len();
-                match code {
-                    KeyCode::Up if app.host_selected > 0 => {
-                        app.host_selected -= 1;
-                    }
-                    KeyCode::Down if host_count > 0 && app.host_selected < host_count - 1 => {
-                        app.host_selected += 1;
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
+    let host_count = app.filtered_hosts().len();
+    if app.host_search.handle_key(code, host_count) {
         return;
     }
-
-    let host_count = app.filtered_hosts().len();
 
     match code {
         KeyCode::Esc => {
             if !app.host_multi_select.is_empty() {
                 app.host_multi_select.clear();
-            } else if app.host_search.is_some() {
-                app.host_search = None;
-                app.host_selected = 0;
+            } else if app.host_search.query.is_some() {
+                app.host_search.query = None;
+                app.host_search.selected = 0;
             } else {
                 app.go_back();
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') if app.host_selected > 0 => {
-            app.host_selected -= 1;
+        KeyCode::Up | KeyCode::Char('k') if app.host_search.selected > 0 => {
+            app.host_search.selected -= 1;
         }
         KeyCode::Down | KeyCode::Char('j')
-            if host_count > 0 && app.host_selected < host_count - 1 =>
+            if host_count > 0 && app.host_search.selected < host_count - 1 =>
         {
-            app.host_selected += 1;
+            app.host_search.selected += 1;
         }
         KeyCode::PageUp => {
-            app.host_selected = app.host_selected.saturating_sub(20);
+            app.host_search.selected = app.host_search.selected.saturating_sub(20);
         }
         KeyCode::PageDown if host_count > 0 => {
-            app.host_selected = (app.host_selected + 20).min(host_count - 1);
+            app.host_search.selected = (app.host_search.selected + 20).min(host_count - 1);
         }
         KeyCode::Home => {
-            app.host_selected = 0;
+            app.host_search.selected = 0;
         }
         KeyCode::End if host_count > 0 => {
-            app.host_selected = host_count - 1;
+            app.host_search.selected = host_count - 1;
         }
         KeyCode::Char('/') => {
-            app.host_searching = true;
-            app.host_search = None;
-            app.host_selected = 0;
+            app.host_search.start();
         }
         KeyCode::Tab => {
             app.host_self_schedule_only = !app.host_self_schedule_only;
-            app.host_selected = 0;
+            app.host_search.selected = 0;
         }
         KeyCode::Char('f') if !app.host_self_schedule_only => {
             app.popup = Some(Popup::HostFilter(HostFilterPopup {
@@ -629,12 +585,12 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
             }));
         }
         KeyCode::Enter => {
-            app.popup = Some(Popup::HostInfo(HostInfoState::new(app.host_selected)));
+            app.popup = Some(Popup::HostInfo(HostInfoState::new(app.host_search.selected)));
         }
         KeyCode::Char(' ') => {
             let hosts = app.filtered_hosts();
             let host_count = hosts.len();
-            if let Some(host) = hosts.get(app.host_selected) {
+            if let Some(host) = hosts.get(app.host_search.selected) {
                 if host.can_self_schedule == Some(true) {
                     let name = host.name.clone();
                     if app.host_multi_select.contains(&name) {
@@ -642,8 +598,8 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
                     } else {
                         app.host_multi_select.insert(name);
                     }
-                    if host_count > 0 && app.host_selected < host_count - 1 {
-                        app.host_selected += 1;
+                    if host_count > 0 && app.host_search.selected < host_count - 1 {
+                        app.host_search.selected += 1;
                     }
                 } else {
                     app.status_message = Some("Host is not self-schedulable".into());
@@ -672,7 +628,7 @@ fn filtered_assignment_count(app: &App) -> usize {
 
 fn get_selected_assignment(app: &App) -> Option<&crate::api::models::Assignment> {
     app.filtered_sorted_assignments()
-        .get(app.assignment_selected)
+        .get(app.assignment_search.selected)
         .copied()
 }
 
@@ -691,49 +647,10 @@ fn assignment_schedule_count(app: &App) -> usize {
 }
 
 fn handle_assignments_key(app: &mut App, code: KeyCode) {
-    if app.assignment_searching {
-        match code {
-            KeyCode::Esc => {
-                app.assignment_searching = false;
-                app.assignment_search = None;
-                app.assignment_selected = 0;
-            }
-            KeyCode::Enter => {
-                app.assignment_searching = false;
-            }
-            KeyCode::Backspace => {
-                if let Some(ref mut s) = app.assignment_search {
-                    s.pop();
-                    if s.is_empty() {
-                        app.assignment_search = None;
-                    }
-                }
-                app.assignment_selected = 0;
-            }
-            KeyCode::Char(c) => {
-                app.assignment_search
-                    .get_or_insert_with(String::new)
-                    .push(c);
-                app.assignment_selected = 0;
-            }
-            KeyCode::Up | KeyCode::Down => {
-                let count = filtered_assignment_count(app);
-                match code {
-                    KeyCode::Up if app.assignment_selected > 0 => {
-                        app.assignment_selected -= 1;
-                    }
-                    KeyCode::Down if count > 0 && app.assignment_selected < count - 1 => {
-                        app.assignment_selected += 1;
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
+    let assignment_count = filtered_assignment_count(app);
+    if app.assignment_search.handle_key(code, assignment_count) {
         return;
     }
-
-    let assignment_count = filtered_assignment_count(app);
 
     if let Some(detail_idx) = app.assignment_detail_selected {
         let schedule_count = assignment_schedule_count(app);
@@ -799,22 +716,22 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
 
     match code {
         KeyCode::Esc => {
-            if app.assignment_search.is_some() {
-                app.assignment_search = None;
-                app.assignment_selected = 0;
+            if app.assignment_search.query.is_some() {
+                app.assignment_search.query = None;
+                app.assignment_search.selected = 0;
             } else {
                 app.go_back();
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') if app.assignment_selected > 0 => {
-            app.assignment_selected -= 1;
+        KeyCode::Up | KeyCode::Char('k') if app.assignment_search.selected > 0 => {
+            app.assignment_search.selected -= 1;
             app.assignment_detail_selected = None;
         }
         KeyCode::Down | KeyCode::Char('j')
-            if assignment_count > 0 && app.assignment_selected < assignment_count - 1 =>
+            if assignment_count > 0 && app.assignment_search.selected < assignment_count - 1 =>
         {
-            app.assignment_selected += 1;
+            app.assignment_search.selected += 1;
             app.assignment_detail_selected = None;
         }
         KeyCode::Enter => {
@@ -824,26 +741,24 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             }
         }
         KeyCode::PageUp => {
-            app.assignment_selected = app.assignment_selected.saturating_sub(20);
+            app.assignment_search.selected = app.assignment_search.selected.saturating_sub(20);
         }
         KeyCode::PageDown if assignment_count > 0 => {
-            app.assignment_selected = (app.assignment_selected + 20).min(assignment_count - 1);
+            app.assignment_search.selected = (app.assignment_search.selected + 20).min(assignment_count - 1);
         }
         KeyCode::Home => {
-            app.assignment_selected = 0;
+            app.assignment_search.selected = 0;
         }
         KeyCode::End if assignment_count > 0 => {
-            app.assignment_selected = assignment_count - 1;
+            app.assignment_search.selected = assignment_count - 1;
         }
         KeyCode::Tab => {
             app.assignment_show_all = !app.assignment_show_all;
-            app.assignment_selected = 0;
+            app.assignment_search.selected = 0;
             app.assignment_detail_selected = None;
         }
         KeyCode::Char('/') => {
-            app.assignment_searching = true;
-            app.assignment_search = None;
-            app.assignment_selected = 0;
+            app.assignment_search.start();
             app.assignment_detail_selected = None;
         }
         KeyCode::Char('t') => {
@@ -853,7 +768,7 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                 } else {
                     &session.my_assignments
                 };
-                if let Some(a) = assignments.get(app.assignment_selected)
+                if let Some(a) = assignments.get(app.assignment_search.selected)
                     && let Some(id) = a.id
                 {
                     app.popup = Some(Popup::ConfirmTerminate(id));
@@ -893,7 +808,7 @@ fn filtered_cloud_count(app: &App) -> usize {
                     _ => return false,
                 }
             }
-            if let Some(ref search) = app.cloud_search
+            if let Some(ref search) = app.cloud_search.query
                 && !app::fuzzy_match(&c.name, search)
                 && !app::fuzzy_match(c.owner.as_deref().unwrap_or(""), search)
                 && !app::fuzzy_match(c.ticket.as_deref().unwrap_or(""), search)
@@ -907,86 +822,47 @@ fn filtered_cloud_count(app: &App) -> usize {
 }
 
 fn handle_clouds_key(app: &mut App, code: KeyCode) {
-    if app.cloud_searching {
-        match code {
-            KeyCode::Esc => {
-                app.cloud_searching = false;
-                app.cloud_search = None;
-                app.cloud_selected = 0;
-            }
-            KeyCode::Enter => {
-                app.cloud_searching = false;
-            }
-            KeyCode::Backspace => {
-                if let Some(ref mut s) = app.cloud_search {
-                    s.pop();
-                    if s.is_empty() {
-                        app.cloud_search = None;
-                    }
-                }
-                app.cloud_selected = 0;
-            }
-            KeyCode::Char(c) => {
-                app.cloud_search.get_or_insert_with(String::new).push(c);
-                app.cloud_selected = 0;
-            }
-            KeyCode::Up | KeyCode::Down => {
-                let cloud_count = filtered_cloud_count(app);
-                match code {
-                    KeyCode::Up if app.cloud_selected > 0 => {
-                        app.cloud_selected -= 1;
-                    }
-                    KeyCode::Down if cloud_count > 0 && app.cloud_selected < cloud_count - 1 => {
-                        app.cloud_selected += 1;
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
+    let cloud_count = filtered_cloud_count(app);
+    if app.cloud_search.handle_key(code, cloud_count) {
         return;
     }
 
-    let cloud_count = filtered_cloud_count(app);
-
     match code {
         KeyCode::Esc => {
-            if app.cloud_search.is_some() {
-                app.cloud_search = None;
-                app.cloud_selected = 0;
+            if app.cloud_search.query.is_some() {
+                app.cloud_search.query = None;
+                app.cloud_search.selected = 0;
             } else {
                 app.go_back();
             }
         }
         KeyCode::Char('q') => app.running = false,
-        KeyCode::Up | KeyCode::Char('k') if app.cloud_selected > 0 => {
-            app.cloud_selected -= 1;
+        KeyCode::Up | KeyCode::Char('k') if app.cloud_search.selected > 0 => {
+            app.cloud_search.selected -= 1;
         }
         KeyCode::Down | KeyCode::Char('j')
-            if cloud_count > 0 && app.cloud_selected < cloud_count - 1 =>
+            if cloud_count > 0 && app.cloud_search.selected < cloud_count - 1 =>
         {
-            app.cloud_selected += 1;
+            app.cloud_search.selected += 1;
         }
         KeyCode::PageUp => {
-            app.cloud_selected = app.cloud_selected.saturating_sub(20);
+            app.cloud_search.selected = app.cloud_search.selected.saturating_sub(20);
         }
         KeyCode::PageDown if cloud_count > 0 => {
-            app.cloud_selected = (app.cloud_selected + 20).min(cloud_count - 1);
+            app.cloud_search.selected = (app.cloud_search.selected + 20).min(cloud_count - 1);
         }
         KeyCode::Home => {
-            app.cloud_selected = 0;
+            app.cloud_search.selected = 0;
         }
         KeyCode::End if cloud_count > 0 => {
-            app.cloud_selected = cloud_count - 1;
+            app.cloud_search.selected = cloud_count - 1;
         }
         KeyCode::Tab => {
             app.cloud_show_all = !app.cloud_show_all;
-            app.cloud_selected = 0;
+            app.cloud_search.selected = 0;
         }
         KeyCode::Char('/') => {
-            app.cloud_searching = true;
-            app.cloud_search = None;
-            app.cloud_selected = 0;
+            app.cloud_search.start();
         }
         KeyCode::Char('r') => spawn_refresh(app),
         KeyCode::Char('x') => {
@@ -1049,7 +925,7 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
                 app.host_filters = popup.flags;
                 app.host_ssm_filter = popup.ssm_only;
                 app.host_gpu_filter = popup.gpu_only;
-                app.host_selected = 0;
+                app.host_search.selected = 0;
             }
         }
         _ => {}
@@ -1574,7 +1450,7 @@ fn open_assignment_picker(app: &mut App) {
 
     let hosts = app.filtered_hosts();
     let selected_hosts: Vec<String> = if app.host_multi_select.is_empty() {
-        if let Some(host) = hosts.get(app.host_selected) {
+        if let Some(host) = hosts.get(app.host_search.selected) {
             if host.can_self_schedule == Some(true) {
                 vec![host.name.clone()]
             } else {

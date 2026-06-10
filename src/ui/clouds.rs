@@ -37,7 +37,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let (table_area, search_area) = if app.cloud_searching || app.cloud_search.is_some() {
+    let (table_area, search_area) = if app.cloud_search.active || app.cloud_search.query.is_some() {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(3), Constraint::Length(1)])
@@ -48,8 +48,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     };
 
     if let Some(sa) = search_area {
-        let query = app.cloud_search.as_deref().unwrap_or("");
-        let cursor = if app.cloud_searching { "\u{2588}" } else { "" };
+        let query = app.cloud_search.query.as_deref().unwrap_or("");
+        let cursor = if app.cloud_search.active { "\u{2588}" } else { "" };
         let search_line = Line::from(vec![
             Span::styled(" /", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw(format!("{}{} ", query, cursor)),
@@ -78,7 +78,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     let filtered: Vec<_> = filtered
         .into_iter()
         .filter(|c| {
-            if let Some(ref search) = app.cloud_search {
+            if let Some(ref search) = app.cloud_search.query {
                 fuzzy_match(&c.name, search)
                     || fuzzy_match(c.owner.as_deref().unwrap_or(""), search)
                     || fuzzy_match(c.ticket.as_deref().unwrap_or(""), search)
@@ -93,7 +93,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, cloud)| {
-            let style = if i == app.cloud_selected {
+            let style = if i == app.cloud_search.selected {
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Cyan)
@@ -158,6 +158,6 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(Style::default());
 
-    let mut state = TableState::default().with_selected(Some(app.cloud_selected));
+    let mut state = TableState::default().with_selected(Some(app.cloud_search.selected));
     f.render_stateful_widget(table, table_area, &mut state);
 }
