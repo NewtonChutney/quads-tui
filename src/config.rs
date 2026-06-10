@@ -7,10 +7,10 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum UpdateFrequency {
+    #[default]
     #[serde(alias = "on_launch")]
     OnLaunch,
     Daily,
-    #[default]
     Weekly,
     Monthly,
     Never,
