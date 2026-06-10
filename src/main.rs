@@ -13,7 +13,7 @@ use app::{
     RefreshUpdate, ScheduleResult, SchedulingProgress, Screen, ServerForm, ServerFormField,
     TextInput,
 };
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use config::{AppConfig, ServerEntry};
 use crossterm::ExecutableCommand;
@@ -36,27 +36,6 @@ use tokio::sync::oneshot;
 
 const AUTO_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
-#[derive(Clone, ValueEnum)]
-enum CliUpdateFrequency {
-    OnLaunch,
-    Daily,
-    Weekly,
-    Monthly,
-    Never,
-}
-
-impl From<CliUpdateFrequency> for config::UpdateFrequency {
-    fn from(f: CliUpdateFrequency) -> Self {
-        match f {
-            CliUpdateFrequency::OnLaunch => Self::OnLaunch,
-            CliUpdateFrequency::Daily => Self::Daily,
-            CliUpdateFrequency::Weekly => Self::Weekly,
-            CliUpdateFrequency::Monthly => Self::Monthly,
-            CliUpdateFrequency::Never => Self::Never,
-        }
-    }
-}
-
 #[derive(Parser)]
 #[command(
     name = "quads-tui",
@@ -73,7 +52,7 @@ impl From<CliUpdateFrequency> for config::UpdateFrequency {
 struct Cli {
     /// Set update check frequency (persists to config)
     #[arg(long = "update-check", value_enum)]
-    update_check: Option<CliUpdateFrequency>,
+    update_check: Option<config::UpdateFrequency>,
 
     /// Print shell completions to stdout
     #[arg(long, value_enum)]
@@ -139,22 +118,8 @@ async fn main() -> Result<()> {
     log::info!("quads-tui starting (log level: {})", log_level);
 
     if let Some(freq) = cli.update_check {
-        let freq_str = match &freq {
-            CliUpdateFrequency::OnLaunch => "on-launch",
-            CliUpdateFrequency::Daily => "daily",
-            CliUpdateFrequency::Weekly => "weekly",
-            CliUpdateFrequency::Monthly => "monthly",
-            CliUpdateFrequency::Never => "never",
-        };
-        let path = AppConfig::config_path()?;
-        let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
-            existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
-        } else {
-            toml_edit::DocumentMut::default()
-        };
-        doc["update_check"] = toml_edit::value(freq_str);
-        std::fs::write(&path, doc.to_string())?;
-        println!("Update check set to: {}", freq_str);
+        AppConfig::set_update_check(&freq)?;
+        println!("Update check set to: {}", freq.as_str());
         return Ok(());
     }
 
@@ -347,10 +312,21 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn is_text_input_active(app: &App) -> bool {
+    app.host_searching
+        || app.assignment_searching
+        || app.cloud_searching
+        || app.popup.as_ref().is_some_and(|p| p.accepts_text_input())
+}
+
 async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
-    let code = match code {
-        KeyCode::Char(c) => KeyCode::Char(c.to_ascii_lowercase()),
-        other => other,
+    let code = if is_text_input_active(app) {
+        code
+    } else {
+        match code {
+            KeyCode::Char(c) => KeyCode::Char(c.to_ascii_lowercase()),
+            other => other,
+        }
     };
 
     if modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {

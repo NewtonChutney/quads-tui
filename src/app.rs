@@ -508,6 +508,15 @@ pub enum Popup {
     ConfigHelp,
 }
 
+impl Popup {
+    pub fn accepts_text_input(&self) -> bool {
+        matches!(
+            self,
+            Popup::AuthForm(_) | Popup::ServerForm(_) | Popup::NewAssignmentForm(_)
+        )
+    }
+}
+
 pub struct App {
     pub running: bool,
     pub screen: Screen,

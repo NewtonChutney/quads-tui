@@ -1,9 +1,10 @@
 use anyhow::Result;
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum UpdateFrequency {
     OnLaunch,
@@ -15,6 +16,16 @@ pub enum UpdateFrequency {
 }
 
 impl UpdateFrequency {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::OnLaunch => "on-launch",
+            Self::Daily => "daily",
+            Self::Weekly => "weekly",
+            Self::Monthly => "monthly",
+            Self::Never => "never",
+        }
+    }
+
     pub fn interval_secs(&self) -> Option<u64> {
         match self {
             Self::OnLaunch => Some(0),
@@ -94,14 +105,7 @@ impl AppConfig {
         }
 
         if self.update_check != UpdateFrequency::default() {
-            let freq_str = match self.update_check {
-                UpdateFrequency::OnLaunch => "on-launch",
-                UpdateFrequency::Daily => "daily",
-                UpdateFrequency::Weekly => "weekly",
-                UpdateFrequency::Monthly => "monthly",
-                UpdateFrequency::Never => "never",
-            };
-            doc["update_check"] = toml_edit::value(freq_str);
+            doc["update_check"] = toml_edit::value(self.update_check.as_str());
         }
 
         match self.last_update_check {
@@ -147,6 +151,18 @@ impl AppConfig {
             }
         }
 
+        std::fs::write(&path, doc.to_string())?;
+        Ok(())
+    }
+
+    pub fn set_update_check(freq: &UpdateFrequency) -> Result<()> {
+        let path = Self::config_path()?;
+        let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
+            existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
+        } else {
+            toml_edit::DocumentMut::default()
+        };
+        doc["update_check"] = toml_edit::value(freq.as_str());
         std::fs::write(&path, doc.to_string())?;
         Ok(())
     }
