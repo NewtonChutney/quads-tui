@@ -1,6 +1,6 @@
 use crate::app::{
     App, AuthForm, AuthFormField, HostFilterFlags, HostFilterPopup, Screen, ServerForm,
-    ServerFormField,
+    ServerFormField, TextInput,
 };
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -168,10 +168,12 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
                 spans.extend(key_hint("Enter", "host info"));
                 spans.extend(key_hint("u", "unschedule"));
                 spans.extend(bracketed_hint("ssh", 0));
+                spans.extend(key_hint("i", "ssh-copy-id"));
                 spans.extend(key_hint("Esc", "back"));
             } else {
                 spans.extend(key_hint("Enter", "hosts"));
                 spans.extend(bracketed_hint("terminate", 0));
+                spans.extend(key_hint("a", "ssh setup"));
                 spans.extend(key_hint("Tab", "all/mine"));
                 spans.extend(key_hint("/", "search"));
             }
@@ -1259,7 +1261,7 @@ fn render_checkbox(f: &mut Frame, area: Rect, label: &str, checked: bool, active
     f.render_widget(line, area);
 }
 
-pub fn render_config_help_popup(f: &mut Frame) {
+pub fn render_config_help_popup(f: &mut Frame, app: &App) {
     let area = centered_rect(50, 30, f.area());
     f.render_widget(Clear, area);
 
@@ -1270,6 +1272,12 @@ pub fn render_config_help_popup(f: &mut Frame) {
 
     let inner = block.inner(area);
     f.render_widget(block, area);
+
+    let password_status = if app.config.ssh_password.is_some() {
+        Span::styled(" (set)", Style::default().fg(Color::Green))
+    } else {
+        Span::styled(" (not set)", Style::default().fg(Color::DarkGray))
+    };
 
     let lines = vec![
         Line::from(vec![
@@ -1299,10 +1307,61 @@ pub fn render_config_help_popup(f: &mut Frame) {
             ),
             Span::raw(" Open config/log dir"),
         ]),
+        Line::from(vec![
+            Span::styled(
+                "[P]",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Set SSH root password"),
+            password_status,
+        ]),
         Line::from(""),
         Line::from(Span::styled(
             "[Esc] or [Q] to close",
             Style::default().fg(Color::Gray),
+        )),
+    ];
+
+    let content = Paragraph::new(lines).style(Style::default().fg(Color::White));
+    f.render_widget(content, inner);
+}
+
+pub fn render_ssh_password_popup(f: &mut Frame, input: &TextInput) {
+    let area = centered_rect(50, 20, f.area());
+    f.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(" SSH Root Password ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let masked: String = "*".repeat(input.value.len());
+    let cursor = "\u{2588}";
+    let (before, after) = masked.split_at(input.cursor);
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "  Password for ssh-copy-id:",
+            Style::default().fg(Color::Gray),
+        )),
+        Line::from(vec![
+            Span::raw(format!("  {}", before)),
+            Span::styled(cursor, Style::default().fg(Color::Yellow)),
+            Span::raw(after.to_string()),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Enter to save, Esc to cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(Span::styled(
+            "  Submit empty to clear",
+            Style::default().fg(Color::DarkGray),
         )),
     ];
 

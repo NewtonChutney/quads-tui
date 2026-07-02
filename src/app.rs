@@ -507,6 +507,7 @@ pub enum Popup {
     UpdateComplete(String),
     Error(String),
     ConfigHelp,
+    SshPasswordInput(TextInput),
 }
 
 #[derive(Debug, Default)]
@@ -565,7 +566,10 @@ impl Popup {
     pub fn accepts_text_input(&self) -> bool {
         matches!(
             self,
-            Popup::AuthForm(_) | Popup::ServerForm(_) | Popup::NewAssignmentForm(_)
+            Popup::AuthForm(_)
+                | Popup::ServerForm(_)
+                | Popup::NewAssignmentForm(_)
+                | Popup::SshPasswordInput(_)
         )
     }
 }
@@ -607,6 +611,14 @@ pub struct App {
     pub update_rx: Option<oneshot::Receiver<Option<crate::update::UpdateInfo>>>,
     pub update_available: Option<crate::update::UpdateInfo>,
     pub pending_ssh: Option<String>,
+    pub pending_ssh_copy_id: Option<String>,
+    pub pending_ssh_setup: Option<SshSetup>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SshSetup {
+    pub alias_prefix: String,
+    pub hosts: Vec<String>,
 }
 
 impl App {
@@ -648,6 +660,8 @@ impl App {
             update_rx: None,
             update_available: None,
             pending_ssh: None,
+            pending_ssh_copy_id: None,
+            pending_ssh_setup: None,
         }
     }
 

@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "quads-tui"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -928,6 +928,7 @@ dependencies = [
  "crossterm",
  "dirs",
  "fs2",
+ "libc",
  "log",
  "ratatui",
  "reqwest",

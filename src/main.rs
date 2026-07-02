@@ -11,7 +11,7 @@ use app::{
     ActionResult, App, AssignmentPickerItem, AssignmentPickerState, AuthForm, AuthFormField,
     ConnectError, ConnectResult, HostFilterPopup, HostInfoState, NewAssignmentForm, Popup,
     RefreshUpdate, ScheduleResult, SchedulingProgress, Screen, ServerForm, ServerFormField,
-    TextInput,
+    SshSetup, TextInput,
 };
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
@@ -88,6 +88,101 @@ fn open_in_file_manager(path: &std::path::Path) {
     #[cfg(target_os = "windows")]
     {
         let _ = std::process::Command::new("explorer").arg(path).spawn();
+    }
+}
+
+fn has_sshpass() -> bool {
+    std::process::Command::new("sshpass")
+        .arg("-V")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok()
+}
+
+fn run_ssh(app: &App, host: &str) {
+    let use_sshpass = app.config.ssh_password.is_some() && has_sshpass();
+
+    eprintln!("Connecting to root@{}...", host);
+    if use_sshpass {
+        eprintln!("Using sshpass for automatic password authentication.");
+    } else if app.config.ssh_password.is_some() {
+        eprintln!("sshpass is not installed. Continuing with manual password entry.");
+    } else {
+        eprintln!("No SSH password configured. Using default ssh authentication.");
+    }
+    eprintln!();
+
+    let mut cmd = if use_sshpass {
+        let mut c = std::process::Command::new("sshpass");
+        c.arg("-p")
+            .arg(app.config.ssh_password.as_ref().unwrap())
+            .arg("ssh");
+        c
+    } else {
+        std::process::Command::new("ssh")
+    };
+    let status = cmd
+        .arg(format!("root@{}", host))
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status();
+
+    match status {
+        Ok(s) => {
+            if !s.success() {
+                log::warn!("ssh to {} exited with: {}", host, s);
+            }
+        }
+        Err(e) => {
+            log::error!("failed to launch ssh to {}: {}", host, e);
+        }
+    }
+}
+
+fn run_ssh_copy_id(app: &App, host: &str) {
+    let use_sshpass = app.config.ssh_password.is_some() && has_sshpass();
+
+    eprintln!("Installing SSH key on root@{}...", host);
+    if use_sshpass {
+        eprintln!("Using sshpass for automatic password authentication.");
+    } else if app.config.ssh_password.is_some() {
+        eprintln!("sshpass is not installed. Continuing with manual password entry.");
+    } else {
+        eprintln!("No SSH password configured. You will be prompted for the password.");
+    }
+    eprintln!();
+
+    let mut cmd = if use_sshpass {
+        let mut c = std::process::Command::new("sshpass");
+        c.arg("-p")
+            .arg(app.config.ssh_password.as_ref().unwrap())
+            .arg("ssh-copy-id");
+        c
+    } else {
+        std::process::Command::new("ssh-copy-id")
+    };
+    let status = cmd
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg(format!("root@{}", host))
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status();
+
+    match status {
+        Ok(s) => {
+            if s.success() {
+                log::info!("ssh-copy-id to {} succeeded", host);
+            } else {
+                log::warn!("ssh-copy-id to {} exited with: {}", host, s);
+            }
+        }
+        Err(e) => {
+            log::error!("failed to launch ssh-copy-id to {}: {}", host, e);
+        }
     }
 }
 
@@ -184,9 +279,12 @@ async fn main() -> Result<()> {
                 } else {
                     handle_key(&mut app, key.code, key.modifiers).await;
                 }
-                if let Some(host) = app.pending_ssh.take() {
+                if app.pending_ssh.is_some()
+                    || app.pending_ssh_copy_id.is_some()
+                    || app.pending_ssh_setup.is_some()
+                {
                     // Drop the event handler to stop its background task
-                    // from polling stdin while SSH is running
+                    // from polling stdin while external commands run
                     drop(events);
 
                     // Suspend TUI
@@ -195,23 +293,24 @@ async fn main() -> Result<()> {
                     io::stdout().execute(LeaveAlternateScreen)?;
                     io::stdout().execute(DisableFocusChange)?;
 
-                    // Run SSH with explicit stdio inheritance
-                    let status = std::process::Command::new("ssh")
-                        .arg(format!("root@{}", host))
-                        .stdin(std::process::Stdio::inherit())
-                        .stdout(std::process::Stdio::inherit())
-                        .stderr(std::process::Stdio::inherit())
-                        .status();
+                    // Ignore SIGINT so Ctrl+C in the child doesn't kill us
+                    let prev_handler = unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
 
-                    match status {
-                        Ok(s) => {
-                            if !s.success() {
-                                log::warn!("ssh to {} exited with: {}", host, s);
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("failed to launch ssh to {}: {}", host, e);
-                        }
+                    if let Some(host) = app.pending_ssh.take() {
+                        run_ssh(&app, &host);
+                    } else if let Some(host) = app.pending_ssh_copy_id.take() {
+                        run_ssh_copy_id(&app, &host);
+                        eprintln!("\nPress Enter to return to quads-tui...");
+                        let _ = std::io::stdin().read_line(&mut String::new());
+                    } else if let Some(setup) = app.pending_ssh_setup.take() {
+                        run_ssh_setup(&app, &setup);
+                        eprintln!("\nPress Enter to return to quads-tui...");
+                        let _ = std::io::stdin().read_line(&mut String::new());
+                    }
+
+                    // Restore SIGINT handler
+                    unsafe {
+                        libc::signal(libc::SIGINT, prev_handler);
                     }
 
                     // Restore TUI
@@ -452,11 +551,19 @@ async fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
                         open_in_file_manager(&config_dir);
                         app.popup = None;
                     }
+                    KeyCode::Char('p') => {
+                        let initial = app.config.ssh_password.clone().unwrap_or_default();
+                        app.popup = Some(Popup::SshPasswordInput(TextInput::from(initial)));
+                    }
                     KeyCode::Esc | KeyCode::Char('q') => {
                         app.popup = None;
                     }
                     _ => {}
                 }
+                return;
+            }
+            Popup::SshPasswordInput(_) => {
+                handle_ssh_password_key(app, code);
                 return;
             }
             _ => {
@@ -762,6 +869,22 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                     }
                 }
             }
+            KeyCode::Char('i') => {
+                if let Some(session) = app.sessions.active_session() {
+                    let assignment = get_selected_assignment(app);
+                    if let Some(assignment) = assignment {
+                        let scheds: Vec<_> = session
+                            .schedules
+                            .iter()
+                            .filter(|s| s.assignment_id == assignment.id)
+                            .collect();
+                        if let Some(sched) = scheds.get(detail_idx) {
+                            let host = sched.host_name().to_string();
+                            app.pending_ssh_copy_id = Some(host);
+                        }
+                    }
+                }
+            }
             KeyCode::Char('q') => app.running = false,
             KeyCode::Char('d') => app.navigate(Screen::Dashboard),
             KeyCode::Char('h') => app.navigate(Screen::Hosts),
@@ -835,6 +958,29 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                 }
             }
         }
+        KeyCode::Char('a') => {
+            if let Some(session) = app.sessions.active_session() {
+                let assignment = get_selected_assignment(app);
+                if let Some(assignment) = assignment {
+                    let desc = assignment.description.as_deref().unwrap_or("assignment");
+                    let alias_prefix = ssh_alias_from_description(desc);
+                    let hosts: Vec<String> = session
+                        .schedules
+                        .iter()
+                        .filter(|s| s.assignment_id == assignment.id)
+                        .map(|s| s.host_name().to_string())
+                        .collect();
+                    if hosts.is_empty() {
+                        app.set_error("No hosts found for this assignment.".into());
+                    } else {
+                        app.pending_ssh_setup = Some(SshSetup {
+                            alias_prefix,
+                            hosts,
+                        });
+                    }
+                }
+            }
+        }
         KeyCode::Char('r') => spawn_refresh(app),
         KeyCode::Char('x') => {
             app.auto_refresh = !app.auto_refresh;
@@ -845,6 +991,185 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
         KeyCode::Right => app.navigate(app.screen.next()),
         KeyCode::Left => app.navigate(app.screen.prev()),
         _ => {}
+    }
+}
+
+fn ssh_alias_from_description(desc: &str) -> String {
+    // Strip common prefixes like "[SSM]" or "[tag]"
+    let stripped = if let Some(rest) = desc.strip_prefix('[') {
+        rest.split_once(']').map(|(_, after)| after).unwrap_or(desc)
+    } else {
+        desc
+    };
+    // Replace non-alphanumeric chars with underscores, collapse, trim
+    let alias: String = stripped
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let alias = alias.trim_matches('_').to_string();
+    // Collapse consecutive underscores
+    let mut result = String::new();
+    let mut prev_underscore = false;
+    for c in alias.chars() {
+        if c == '_' {
+            if !prev_underscore {
+                result.push('_');
+            }
+            prev_underscore = true;
+        } else {
+            result.push(c);
+            prev_underscore = false;
+        }
+    }
+    if result.is_empty() {
+        "assignment".to_string()
+    } else {
+        result
+    }
+}
+
+fn run_ssh_setup(app: &App, setup: &SshSetup) {
+    let use_sshpass = app.config.ssh_password.is_some() && has_sshpass();
+
+    eprintln!("Setting up SSH for {} host(s)...", setup.hosts.len());
+    eprintln!("Alias prefix: {}", setup.alias_prefix);
+    eprintln!();
+
+    // Generate aliases
+    let aliases: Vec<(String, &String)> = setup
+        .hosts
+        .iter()
+        .enumerate()
+        .map(|(i, host)| (format!("{}_m{}", setup.alias_prefix, i + 1), host))
+        .collect();
+
+    // Write ssh_config entries
+    let ssh_config_path = dirs::home_dir()
+        .map(|h| h.join(".ssh").join("config"))
+        .expect("cannot determine home directory");
+
+    // Read existing config
+    let existing = std::fs::read_to_string(&ssh_config_path).unwrap_or_default();
+
+    // Build new entries, skipping any alias that already exists
+    let mut new_entries = String::new();
+    let mut skipped = Vec::new();
+    for (alias, host) in &aliases {
+        if existing.lines().any(|line| {
+            let trimmed = line.trim();
+            trimmed.eq_ignore_ascii_case(&format!("Host {}", alias))
+        }) {
+            skipped.push(alias.as_str());
+            continue;
+        }
+        new_entries.push_str(&format!(
+            "\nHost {}\n    HostName {}\n    User root\n",
+            alias, host
+        ));
+    }
+
+    if !new_entries.is_empty() {
+        // Ensure .ssh directory exists
+        if let Some(ssh_dir) = ssh_config_path.parent() {
+            let _ = std::fs::create_dir_all(ssh_dir);
+        }
+
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&ssh_config_path)
+        {
+            Ok(mut file) => {
+                use std::io::Write;
+                if let Err(e) = file.write_all(new_entries.as_bytes()) {
+                    eprintln!("Failed to write ssh config: {}", e);
+                    return;
+                }
+                let added: Vec<_> = aliases
+                    .iter()
+                    .filter(|(a, _)| !skipped.contains(&a.as_str()))
+                    .collect();
+                eprintln!("Added {} SSH config entries:", added.len());
+                for (alias, host) in &added {
+                    eprintln!("  {} -> {}", alias, host);
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to open {}: {}", ssh_config_path.display(), e);
+                return;
+            }
+        }
+    } else {
+        eprintln!("All aliases already exist in ssh config.");
+    }
+
+    if !skipped.is_empty() {
+        eprintln!("Skipped (already in config): {}", skipped.join(", "));
+    }
+
+    eprintln!();
+
+    // Run ssh-copy-id for each host
+    eprintln!("Installing SSH keys...");
+    if use_sshpass {
+        eprintln!("Using sshpass for automatic password authentication.");
+    } else if app.config.ssh_password.is_some() {
+        eprintln!("sshpass is not installed. You will be prompted for each host.");
+    } else {
+        eprintln!("No SSH password configured. You will be prompted for each host.");
+    }
+    eprintln!();
+
+    for (i, (alias, host)) in aliases.iter().enumerate() {
+        eprintln!(
+            "[{}/{}] ssh-copy-id {} ({})",
+            i + 1,
+            aliases.len(),
+            alias,
+            host
+        );
+
+        let mut cmd = if use_sshpass {
+            let mut c = std::process::Command::new("sshpass");
+            c.arg("-p")
+                .arg(app.config.ssh_password.as_ref().unwrap())
+                .arg("ssh-copy-id");
+            c
+        } else {
+            std::process::Command::new("ssh-copy-id")
+        };
+        let status = cmd
+            .arg("-o")
+            .arg("StrictHostKeyChecking=no")
+            .arg(format!("root@{}", host))
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                eprintln!("  ✓ Key installed on {}", host);
+            }
+            Ok(s) => {
+                eprintln!("  ✗ ssh-copy-id failed for {} (exit: {})", host, s);
+            }
+            Err(e) => {
+                eprintln!("  ✗ Failed to run ssh-copy-id for {}: {}", host, e);
+            }
+        }
+        eprintln!();
+    }
+
+    eprintln!("SSH setup complete. You can now use:");
+    for (alias, _) in &aliases {
+        eprintln!("  ssh {}", alias);
     }
 }
 
@@ -991,6 +1316,52 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
                 app.host_gpu_filter = popup.gpu_only;
                 app.host_search.selected = 0;
             }
+        }
+        _ => {}
+    }
+}
+
+fn handle_ssh_password_key(app: &mut App, code: KeyCode) {
+    let Some(Popup::SshPasswordInput(ref mut input)) = app.popup else {
+        return;
+    };
+    match code {
+        KeyCode::Esc => {
+            app.popup = None;
+        }
+        KeyCode::Enter => {
+            let value = input.value.clone();
+            if value.is_empty() {
+                app.config.ssh_password = None;
+            } else {
+                app.config.ssh_password = Some(value);
+            }
+            if let Err(e) = app.config.save() {
+                log::error!("failed to save config: {}", e);
+            }
+            app.popup = None;
+            app.status_message = Some("SSH password saved".into());
+        }
+        KeyCode::Backspace => {
+            input.backspace();
+        }
+        KeyCode::Delete => {
+            input.delete();
+        }
+        KeyCode::Left => {
+            input.move_left();
+        }
+        KeyCode::Right => {
+            input.move_right();
+        }
+        KeyCode::Home => {
+            input.move_home();
+        }
+        KeyCode::End => {
+            input.move_end();
+        }
+        KeyCode::Char(c) => {
+            input.insert(c);
         }
         _ => {}
     }

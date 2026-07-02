@@ -63,6 +63,8 @@ pub struct AppConfig {
     pub last_update_check: Option<u64>,
     #[serde(default)]
     pub servers: BTreeMap<String, ServerEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>,
 }
 
 impl AppConfig {
@@ -95,14 +97,20 @@ impl AppConfig {
         }
 
         let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
-            existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
+            existing
+                .parse::<toml_edit::DocumentMut>()
+                .unwrap_or_default()
         } else {
             toml_edit::DocumentMut::default()
         };
 
         match &self.default_server {
-            Some(s) => { doc["default_server"] = toml_edit::value(s.as_str()); }
-            None => { doc.remove("default_server"); }
+            Some(s) => {
+                doc["default_server"] = toml_edit::value(s.as_str());
+            }
+            None => {
+                doc.remove("default_server");
+            }
         }
 
         if self.update_check != UpdateFrequency::default() {
@@ -110,8 +118,12 @@ impl AppConfig {
         }
 
         match self.last_update_check {
-            Some(ts) => { doc["last_update_check"] = toml_edit::value(ts as i64); }
-            None => { doc.remove("last_update_check"); }
+            Some(ts) => {
+                doc["last_update_check"] = toml_edit::value(ts as i64);
+            }
+            None => {
+                doc.remove("last_update_check");
+            }
         }
 
         if self.servers.is_empty() {
@@ -133,22 +145,41 @@ impl AppConfig {
 
                 for (name, entry) in &self.servers {
                     let is_new = !tbl.contains_key(name);
-                    let server = tbl.entry(name).or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
+                    let server = tbl
+                        .entry(name)
+                        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
                     if let Some(st) = server.as_table_mut() {
                         st["url"] = toml_edit::value(&entry.url);
                         match &entry.username {
-                            Some(u) => { st["username"] = toml_edit::value(u.as_str()); }
-                            None => { st.remove("username"); }
+                            Some(u) => {
+                                st["username"] = toml_edit::value(u.as_str());
+                            }
+                            None => {
+                                st.remove("username");
+                            }
                         }
                         match &entry.password {
-                            Some(p) => { st["password"] = toml_edit::value(p.as_str()); }
-                            None => { st.remove("password"); }
+                            Some(p) => {
+                                st["password"] = toml_edit::value(p.as_str());
+                            }
+                            None => {
+                                st.remove("password");
+                            }
                         }
                         if is_new {
                             st["verify_ssl"] = toml_edit::value(entry.verify_ssl);
                         }
                     }
                 }
+            }
+        }
+
+        match &self.ssh_password {
+            Some(p) => {
+                doc["ssh_password"] = toml_edit::value(p.as_str());
+            }
+            None => {
+                doc.remove("ssh_password");
             }
         }
 
@@ -162,7 +193,9 @@ impl AppConfig {
             std::fs::create_dir_all(parent)?;
         }
         let mut doc = if let Ok(existing) = std::fs::read_to_string(&path) {
-            existing.parse::<toml_edit::DocumentMut>().unwrap_or_default()
+            existing
+                .parse::<toml_edit::DocumentMut>()
+                .unwrap_or_default()
         } else {
             toml_edit::DocumentMut::default()
         };

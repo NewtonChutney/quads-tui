@@ -76,7 +76,10 @@ pub fn render(f: &mut Frame, app: &App) {
                 widgets::render_update_complete_popup(f, msg);
             }
             Popup::ConfigHelp => {
-                widgets::render_config_help_popup(f);
+                widgets::render_config_help_popup(f, app);
+            }
+            Popup::SshPasswordInput(input) => {
+                widgets::render_ssh_password_popup(f, input);
             }
         }
     }

@@ -1,6 +1,6 @@
 [package]
 name = "quads-tui"
-version = "0.7.3"
+version = "0.8.0"
 edition = "2024"
 repository = "https://github.com/NewtonChutney/quads-tui"
 license = "MIT"
@@ -38,3 +38,4 @@ log = "0.4"
 simplelog = "0.12"
 fs2 = "0.4"
 semver = "1"
+libc = "0.2"
