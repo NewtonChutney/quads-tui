@@ -167,6 +167,7 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
             if app.assignment_detail_selected.is_some() {
                 spans.extend(key_hint("Enter", "host info"));
                 spans.extend(key_hint("u", "unschedule"));
+                spans.extend(bracketed_hint("ssh", 0));
                 spans.extend(key_hint("Esc", "back"));
             } else {
                 spans.extend(key_hint("Enter", "hosts"));
@@ -927,7 +928,10 @@ pub fn render_host_info_popup(f: &mut Frame, app: &App, info: &crate::app::HostI
         Span::styled("Enter", Style::default().fg(Color::Yellow)),
         Span::styled("] expand/collapse  [", Style::default().fg(Color::DarkGray)),
         Span::styled("a", Style::default().fg(Color::Yellow)),
-        Span::styled("] expand/collapse all  [", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "] expand/collapse all  [",
+            Style::default().fg(Color::DarkGray),
+        ),
         Span::styled("Esc", Style::default().fg(Color::Yellow)),
         Span::styled("] close", Style::default().fg(Color::DarkGray)),
     ]));
@@ -996,10 +1000,8 @@ pub fn render_host_filter_popup(f: &mut Frame, popup: &HostFilterPopup) {
     f.render_widget(status_widget, panes[0]);
 
     let right_focused = popup.pane == FilterPane::SelfSchedule;
-    let right_items: [(&str, bool); 2] = [
-        ("SSM only", popup.ssm_only),
-        ("GPU only", popup.gpu_only),
-    ];
+    let right_items: [(&str, bool); 2] =
+        [("SSM only", popup.ssm_only), ("GPU only", popup.gpu_only)];
     let mut right_lines = vec![];
     for (i, (label, checked)) in right_items.iter().enumerate() {
         let check = if *checked { "x" } else { " " };

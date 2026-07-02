@@ -17,6 +17,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use config::{AppConfig, ServerEntry};
 use crossterm::ExecutableCommand;
+use crossterm::cursor::{Hide, Show};
 use crossterm::event::{
     DisableFocusChange, EnableFocusChange, KeyCode, KeyEventKind, KeyModifiers,
 };
@@ -182,6 +183,46 @@ async fn main() -> Result<()> {
                     }
                 } else {
                     handle_key(&mut app, key.code, key.modifiers).await;
+                }
+                if let Some(host) = app.pending_ssh.take() {
+                    // Drop the event handler to stop its background task
+                    // from polling stdin while SSH is running
+                    drop(events);
+
+                    // Suspend TUI
+                    disable_raw_mode()?;
+                    io::stdout().execute(Show)?;
+                    io::stdout().execute(LeaveAlternateScreen)?;
+                    io::stdout().execute(DisableFocusChange)?;
+
+                    // Run SSH with explicit stdio inheritance
+                    let status = std::process::Command::new("ssh")
+                        .arg(format!("root@{}", host))
+                        .stdin(std::process::Stdio::inherit())
+                        .stdout(std::process::Stdio::inherit())
+                        .stderr(std::process::Stdio::inherit())
+                        .status();
+
+                    match status {
+                        Ok(s) => {
+                            if !s.success() {
+                                log::warn!("ssh to {} exited with: {}", host, s);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("failed to launch ssh to {}: {}", host, e);
+                        }
+                    }
+
+                    // Restore TUI
+                    enable_raw_mode()?;
+                    io::stdout().execute(EnterAlternateScreen)?;
+                    io::stdout().execute(EnableFocusChange)?;
+                    io::stdout().execute(Hide)?;
+                    terminal.clear()?;
+
+                    // Recreate the event handler
+                    events = EventHandler::new(Duration::from_millis(250));
                 }
             }
             Event::FocusGained => {
@@ -585,7 +626,9 @@ fn handle_hosts_key(app: &mut App, code: KeyCode) {
             }));
         }
         KeyCode::Enter => {
-            app.popup = Some(Popup::HostInfo(HostInfoState::new(app.host_search.selected)));
+            app.popup = Some(Popup::HostInfo(HostInfoState::new(
+                app.host_search.selected,
+            )));
         }
         KeyCode::Char(' ') => {
             let hosts = app.filtered_hosts();
@@ -703,6 +746,22 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
                     }
                 }
             }
+            KeyCode::Char('s') => {
+                if let Some(session) = app.sessions.active_session() {
+                    let assignment = get_selected_assignment(app);
+                    if let Some(assignment) = assignment {
+                        let scheds: Vec<_> = session
+                            .schedules
+                            .iter()
+                            .filter(|s| s.assignment_id == assignment.id)
+                            .collect();
+                        if let Some(sched) = scheds.get(detail_idx) {
+                            let host = sched.host_name().to_string();
+                            app.pending_ssh = Some(host);
+                        }
+                    }
+                }
+            }
             KeyCode::Char('q') => app.running = false,
             KeyCode::Char('d') => app.navigate(Screen::Dashboard),
             KeyCode::Char('h') => app.navigate(Screen::Hosts),
@@ -744,7 +803,8 @@ fn handle_assignments_key(app: &mut App, code: KeyCode) {
             app.assignment_search.selected = app.assignment_search.selected.saturating_sub(20);
         }
         KeyCode::PageDown if assignment_count > 0 => {
-            app.assignment_search.selected = (app.assignment_search.selected + 20).min(assignment_count - 1);
+            app.assignment_search.selected =
+                (app.assignment_search.selected + 20).min(assignment_count - 1);
         }
         KeyCode::Home => {
             app.assignment_search.selected = 0;
@@ -894,7 +954,9 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
                 match popup.pane {
                     app::FilterPane::Status if popup.cursor > 0 => popup.cursor -= 1,
-                    app::FilterPane::SelfSchedule if popup.right_cursor > 0 => popup.right_cursor -= 1,
+                    app::FilterPane::SelfSchedule if popup.right_cursor > 0 => {
+                        popup.right_cursor -= 1
+                    }
                     _ => {}
                 }
             }
@@ -903,7 +965,9 @@ fn handle_host_filter_key(app: &mut App, code: KeyCode) {
             if let Some(Popup::HostFilter(ref mut popup)) = app.popup {
                 match popup.pane {
                     app::FilterPane::Status if popup.cursor < 3 => popup.cursor += 1,
-                    app::FilterPane::SelfSchedule if popup.right_cursor < 1 => popup.right_cursor += 1,
+                    app::FilterPane::SelfSchedule if popup.right_cursor < 1 => {
+                        popup.right_cursor += 1
+                    }
                     _ => {}
                 }
             }

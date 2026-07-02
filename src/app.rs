@@ -606,6 +606,7 @@ pub struct App {
     pub refresh_rx: Option<tokio::sync::mpsc::Receiver<RefreshUpdate>>,
     pub update_rx: Option<oneshot::Receiver<Option<crate::update::UpdateInfo>>>,
     pub update_available: Option<crate::update::UpdateInfo>,
+    pub pending_ssh: Option<String>,
 }
 
 impl App {
@@ -646,6 +647,7 @@ impl App {
             refresh_rx: None,
             update_rx: None,
             update_available: None,
+            pending_ssh: None,
         }
     }
 
