@@ -1395,9 +1395,7 @@ fn handle_host_info_key(app: &mut App, code: KeyCode) {
             if let Some(Popup::HostInfo(ref mut state)) = app.popup {
                 let all_expanded = state.sections.iter().all(|&s| s);
                 let new_val = !all_expanded;
-                for s in &mut state.sections {
-                    *s = new_val;
-                }
+                state.sections.fill(new_val);
             }
         }
         KeyCode::PageUp => {
