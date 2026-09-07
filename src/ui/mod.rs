@@ -82,5 +82,7 @@ pub fn render(f: &mut Frame, app: &App) {
                 widgets::render_ssh_password_popup(f, input);
             }
         }
+    } else if app.loading {
+        widgets::render_refreshing_popup(f, app.spinner_char());
     }
 }

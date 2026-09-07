@@ -188,9 +188,13 @@ pub fn render_help_bar(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    let in_assignment_detail =
+        app.screen == Screen::Assignments && app.assignment_detail_selected.is_some();
     let mut right_spans: Vec<Span> = Vec::new();
     right_spans.extend(key_hint("?", "config/logs"));
-    right_spans.extend(key_hint("r", "refresh"));
+    if !in_assignment_detail {
+        right_spans.extend(key_hint("r", "refresh"));
+    }
     let ar_label = if app.auto_refresh {
         "auto-refresh [on]"
     } else {
@@ -704,6 +708,23 @@ pub fn render_working_popup(f: &mut Frame, msg: &str, spinner: char) {
                 .border_style(Style::default().fg(Color::Yellow)),
         )
         .style(Style::default().fg(Color::Yellow));
+
+    f.render_widget(popup, area);
+}
+
+pub fn render_refreshing_popup(f: &mut Frame, spinner: char) {
+    let area = centered_rect(30, 10, f.area());
+    f.render_widget(Clear, area);
+
+    let text = format!(" {} Refreshing data...", spinner);
+    let popup = Paragraph::new(text)
+        .block(
+            Block::default()
+                .title(" Refreshing ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        )
+        .style(Style::default().fg(Color::Cyan));
 
     f.render_widget(popup, area);
 }
